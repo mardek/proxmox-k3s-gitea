@@ -1,0 +1,24 @@
+#cloud-config
+hostname: ${hostname}
+package_update: true
+packages:
+  - curl
+  - qemu-guest-agent
+users:
+  - default
+  - name: debian
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+write_files:
+  - path: /etc/rancher/k3s/config.yaml
+    permissions: "0600"
+    content: |
+      token: ${k3s_token}
+      node-name: ${hostname}
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+  - [sh, -c, "curl -sfL https://get.k3s.io | sh -"]
+  - [sh, -c, "work_dir=$(mktemp -d) && curl -fsSL https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_amd64.tar.gz -o $work_dir/k9s_Linux_amd64.tar.gz && curl -fsSL https://github.com/derailed/k9s/releases/download/v0.51.0/checksums.sha256 -o $work_dir/checksums.sha256 && cd $work_dir && sha256sum --ignore-missing -c checksums.sha256 && tar -xzf k9s_Linux_amd64.tar.gz k9s && install -m 0755 k9s /usr/local/bin/k9s && cd / && rm -rf $work_dir"]

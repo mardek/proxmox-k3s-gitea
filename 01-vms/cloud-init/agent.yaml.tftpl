@@ -1,0 +1,25 @@
+#cloud-config
+hostname: ${hostname}
+package_update: true
+packages:
+  - curl
+  - qemu-guest-agent
+users:
+  - default
+  - name: debian
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+write_files:
+  - path: /etc/rancher/k3s/config.yaml
+    permissions: "0600"
+    content: |
+      server: https://${server_address}:6443
+      token: ${k3s_token}
+      node-name: ${hostname}
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+  - [sh, -c, "for i in $(seq 1 60); do curl -kfs https://${server_address}:6443/ping && break; sleep 5; done; curl -kfs https://${server_address}:6443/ping"]
+  - [sh, -c, "curl -sfL https://get.k3s.io | sh -s - agent"]

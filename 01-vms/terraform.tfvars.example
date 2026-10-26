@@ -1,0 +1,15 @@
+proxmox_endpoint = "https://192.168.2.10:8006/"
+proxmox_node     = "pve"
+template_vm_id   = 9000
+ssh_public_key   = "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY"
+
+proxmox_insecure     = true
+proxmox_ssh_username = "root"
+proxmox_ssh_address  = "192.168.2.10"
+datastore_id         = "local-lvm"
+snippet_datastore_id = "local"
+disk_interface       = "scsi0"
+network_bridge       = "vmbr0"
+network_gateway      = "192.168.2.1"
+network_prefix       = 24
+dns_servers          = ["192.168.2.1"]
