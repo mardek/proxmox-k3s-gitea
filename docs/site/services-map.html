@@ -1,3 +1,40 @@
-This file is from the Kimi session zip.
-
-HTML services map showing AWS and Kubernetes service mappings.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Services Map</title>
+<link rel="stylesheet" href="site-style.css">
+</head>
+<body>
+<header><h1>AWS to k3s Services Map</h1></header>
+<main>
+<section>
+<h2>Compute</h2>
+<table>
+<tr><th>AWS</th><th>k3s</th></tr>
+<tr><td>EC2</td><td>Node (VM)</td></tr>
+<tr><td>EKS Control Plane</td><td>k3s server</td></tr>
+<tr><td>Fargate</td><td>Container on node</td></tr>
+</table>
+</section>
+<section>
+<h2>Storage</h2>
+<table>
+<tr><th>AWS</th><th>k3s</th></tr>
+<tr><td>EBS</td><td>Longhorn / local-path</td></tr>
+<tr><td>EFS</td><td>Longhorn RWX / NFS</td></tr>
+<tr><td>S3</td><td>MinIO (if deployed)</td></tr>
+</table>
+</section>
+<section>
+<h2>Networking</h2>
+<table>
+<tr><th>AWS</th><th>k3s</th></tr>
+<tr><td>VPC CNI</td><td>Flannel</td></tr>
+<tr><td>ALB</td><td>Traefik</td></tr>
+<tr><td>Security Groups</td><td>Network Policies</td></tr>
+</table>
+</section>
+</main>
+</body>
+</html>

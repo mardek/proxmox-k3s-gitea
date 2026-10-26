@@ -1,3 +1,46 @@
-This file is from the Kimi session zip.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hands-On Exercises</title>
+<link rel="stylesheet" href="site-style.css">
+</head>
+<body>
+<header><h1>Hands-On Exercises</h1></header>
+<main>
+<section>
+<h2>Exercise 1: Deploy nginx</h2>
+<pre><code>kubectl create deployment nginx --image=nginx
+kubectl expose deployment nginx --port=80 --type=NodePort
+kubectl get svc nginx</code></pre>
+</section>
+<section>
+<h2>Exercise 2: Scale a Deployment</h2>
+<pre><code>kubectl scale deployment nginx --replicas=3
+kubectl get pods -l app=nginx</code></pre>
+</section>
+<section>
+<h2>Exercise 3: Create a ConfigMap</h2>
+<pre><code>kubectl create configmap app-config --from-literal=env=production
+kubectl get configmap app-config -o yaml</code></pre>
+</section>
+<section>
+<h2>Exercise 4: PVC and Pod</h2>
+<pre><code>cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+EOF
 
-HTML exercises page with hands-on Kubernetes and DevSecOps labs.
+kubectl get pvc test-pvc</code></pre>
+</section>
+</main>
+</body>
+</html>
