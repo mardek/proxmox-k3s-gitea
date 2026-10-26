@@ -13,7 +13,7 @@ image:
 
 persistence:
   enabled: true
-  storageClass: local-path
+  storageClass: longhorn
   size: 5Gi
 
 service:
@@ -42,7 +42,7 @@ postgresql:
   primary:
     persistence:
       enabled: true
-      storageClass: local-path
+      storageClass: longhorn
       size: 5Gi
   metrics:
     image:

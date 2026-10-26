@@ -25,10 +25,14 @@ log "Waiting for Longhorn controllers and node drivers"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   'sudo kubectl -n longhorn-system wait --for=condition=Available deployment --all --timeout=15m && sudo kubectl -n longhorn-system rollout status daemonset --all --timeout=15m'
 
-log "Creating the RWX StorageClass and test workload"
+log "Creating the RWX StorageClass"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo kubectl apply -f -' \
   < "${script_dir}/storageclass.yaml"
-ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo kubectl apply -f -' \
-  < "${script_dir}/test-rwx.yaml"
 
-"${script_dir}/validate.sh"
+log "Setting longhorn as the default StorageClass"
+ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+  "sudo kubectl patch storageclass longhorn -p '{\"metadata\":{\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
+ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+  "sudo kubectl patch storageclass local-path -p '{\"metadata\":{\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"false\"}}}'"
+
+log "Longhorn installation complete"
