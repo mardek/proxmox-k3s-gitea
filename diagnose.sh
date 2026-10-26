@@ -65,8 +65,9 @@ control 'kubectl get nodes -o wide'
 section "Checking all Pods"
 control 'kubectl get pods -A -o wide'
 
-section "Checking Longhorn (optional)"
-control 'if kubectl get namespace longhorn-system >/dev/null 2>&1; then kubectl -n longhorn-system get pods -o wide; kubectl -n longhorn-system get sharemanager; else echo "Longhorn is not installed"; fi'
+section "Checking Longhorn"
+control 'kubectl -n longhorn-system get pods -o wide'
+control 'kubectl -n longhorn-system get sharemanager'
 
 section "Checking storage"
 control 'kubectl get sc'

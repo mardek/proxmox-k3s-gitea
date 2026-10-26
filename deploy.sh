@@ -63,13 +63,15 @@ done
 
 log "Copying deployment scripts to the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "mkdir -p '${remote_dir}/02-kubernetes' '${remote_dir}/03-gitea'"
+  "mkdir -p '${remote_dir}/02-kubernetes' '${remote_dir}/03-gitea' '${remote_dir}/04-longhorn'"
 scp -q "${ssh_options[@]}" "${script_dir}/02-kubernetes/"*.sh \
   "debian@${control_plane_address}:${remote_dir}/02-kubernetes/"
 scp -q "${ssh_options[@]}" "${script_dir}/03-gitea/install.sh" "${script_dir}/03-gitea/values.yaml" \
   "debian@${control_plane_address}:${remote_dir}/03-gitea/"
+scp -q "${ssh_options[@]}" "${script_dir}/04-longhorn/"*.sh "${script_dir}/04-longhorn/"*.yaml \
+  "debian@${control_plane_address}:${remote_dir}/04-longhorn/"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "chmod +x '${remote_dir}/02-kubernetes/'*.sh '${remote_dir}/03-gitea/install.sh'"
+  "chmod +x '${remote_dir}/02-kubernetes/'*.sh '${remote_dir}/03-gitea/install.sh' '${remote_dir}/04-longhorn/'*.sh"
 
 log "Waiting for all four Kubernetes nodes to become Ready"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
@@ -82,6 +84,10 @@ ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
 log "Installing K9s on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo '${remote_dir}/02-kubernetes/install-k9s.sh'"
+
+log "Installing Longhorn distributed storage"
+ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+  "sudo '${remote_dir}/04-longhorn/install.sh'"
 
 log "Installing or upgrading Gitea with Helm"
 {

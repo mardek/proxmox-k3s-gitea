@@ -1,6 +1,6 @@
 # Proxmox + K3s + Gitea Lab
 
-Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via Cloud-Init, Gitea via Helm, and optional Longhorn RWX distributed storage.
+Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via Cloud-Init, Gitea via Helm, and Longhorn distributed storage by default.
 
 ## Architecture
 
@@ -26,15 +26,12 @@ cp 01-vms/terraform.tfvars.example 01-vms/terraform.tfvars
 terraform -chdir=01-vms init
 terraform -chdir=01-vms apply
 
-# 3. Wait for cluster
-02-kubernetes/wait-for-cluster.sh 4 600
-
-# 4. Deploy Gitea
+# 3. Full deploy (includes Longhorn + Gitea)
 export GITEA_ADMIN_PASSWORD='choose-strong-password'
-03-gitea/install.sh
+./deploy.sh
 
-# 5. Access Gitea
-run.sh
+# 4. Access Gitea
+./run.sh
 ```
 
 ## Repository Layout
@@ -44,7 +41,7 @@ run.sh
 | `01-vms/` | Terraform: Proxmox VMs + Cloud-Init |
 | `02-kubernetes/` | Cluster readiness, Helm + K9s install |
 | `03-gitea/` | Gitea Helm deployment |
-| `04-longhorn/` | Longhorn RWX storage (optional) |
+| `04-longhorn/` | Longhorn distributed storage |
 | `deploy.sh` | One-shot deploy from scratch |
 | `destroy.sh` | Complete teardown |
 | `diagnose.sh` | Health check all layers |
@@ -54,10 +51,11 @@ run.sh
 
 ## Storage
 
-| Class | Backend | Access | Replicas |
-|-------|---------|--------|----------|
-| `local-path` | Host disk | RWO | 1 |
-| `longhorn-rwx` | Longhorn | RWX | 3 |
+| Class | Backend | Access | Replicas | Default |
+|-------|---------|--------|----------|---------|
+| `longhorn` | Longhorn | RWO | 3 | Yes |
+| `longhorn-rwx` | Longhorn | RWX | 3 | No |
+| `local-path` | Host disk | RWO | 1 | No |
 
 ## Secrets
 
