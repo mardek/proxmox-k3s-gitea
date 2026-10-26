@@ -1,0 +1,38 @@
+# Gitea Helm values for k3s homelab
+# Usage: helm install gitea gitea-charts/gitea -n gitea -f k8s/gitea-values.yaml
+
+replicaCount: 1
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: 5Gi
+  accessModes:
+    - ReadWriteOnce
+
+postgresql:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 5Gi
+
+# Disable HA components for single-node simplicity
+valkey-cluster:
+  enabled: false
+
+# Use in-memory cache/session (acceptable for homelab)
+gitea:
+  config:
+    cache:
+      ADAPTER: memory
+    session:
+      PROVIDER: memory
+
+service:
+  http:
+    type: ClusterIP
+    port: 3000
+  ssh:
+    type: ClusterIP
+    port: 22
