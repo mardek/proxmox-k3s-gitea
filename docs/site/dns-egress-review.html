@@ -1,3 +1,39 @@
-This file is from the Kimi session zip.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DNS & Egress Review</title>
+<link rel="stylesheet" href="site-style.css">
+</head>
+<body>
+<header><h1>DNS & Egress Networking Review</h1></header>
+<main>
+<section>
+<h2>DNS in Kubernetes</h2>
+<p>CoreDNS runs in the kube-system namespace and handles service discovery. Pods use the cluster DNS to resolve service names to ClusterIP addresses.</p>
+<pre><code># Check CoreDNS pods
+kubectl get pods -n kube-system -l k8s-app=kube-dns
 
-HTML review page for DNS and egress networking concepts.
+# Test DNS from a pod
+kubectl run -it --rm debug --image=busybox:1.28 --restart=Never -- nslookup kubernetes.default</code></pre>
+</section>
+<section>
+<h2>Egress Traffic</h2>
+<p>By default, all pods can initiate outbound connections. NetworkPolicies can restrict egress to specific destinations.</p>
+<pre><code># Example: allow egress only to specific CIDR
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/8</code></pre>
+</section>
+</main>
+</body>
+</html>

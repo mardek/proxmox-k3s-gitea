@@ -1,3 +1,32 @@
-This file is from the Kimi session zip.
-
-HTML glossary page with DevSecOps and Kubernetes terminology definitions.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Glossary</title>
+<link rel="stylesheet" href="site-style.css">
+</head>
+<body>
+<header><h1>DevSecOps & Kubernetes Glossary</h1></header>
+<main>
+<section>
+<h2>Core Concepts</h2>
+<dl>
+<dt>Pod</dt>
+<dd>Smallest deployable unit in Kubernetes. A pod wraps one or more containers that share network and storage.</dd>
+<dt>Deployment</dt>
+<dd>Manages a set of identical pods. Ensures the desired number of replicas are running.</dd>
+<dt>Service</dt>
+<dd>Stable network endpoint providing access to a set of pods.</dd>
+<dt>Ingress</dt>
+<dd>Defines HTTP/HTTPS routing rules. Requires an Ingress Controller to process rules.</dd>
+<dt>StorageClass</dt>
+<dd>Template defining how storage should be dynamically provisioned.</dd>
+<dt>PersistentVolumeClaim (PVC)</dt>
+<dd>Request for storage by a pod. Specifies size, access mode, and storage class.</dd>
+<dt>PersistentVolume (PV)</dt>
+<dd>Cluster-level storage resource representing actual storage.</dd>
+</dl>
+</section>
+</main>
+</body>
+</html>

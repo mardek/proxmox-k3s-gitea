@@ -1,3 +1,51 @@
-This file is from the Kimi session zip.
-
-HTML index page for the DevSecOps homelab documentation site.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevSecOps Homelab</title>
+<link rel="stylesheet" href="site-style.css">
+</head>
+<body>
+<header>
+<h1>DevSecOps Homelab</h1>
+<p>Personal Kubernetes lab on Proxmox + k3s</p>
+</header>
+<nav>
+<a href="index.html">Home</a>
+<a href="k8s-setup.html">k3s Setup</a>
+<a href="glossary.html">Glossary</a>
+<a href="preparation-guide.html">Prep Guide</a>
+<a href="services-map.html">Services</a>
+<a href="exercises.html">Exercises</a>
+<a href="week1-labs.html">Week 1</a>
+<a href="study-method.html">Study</a>
+<a href="dns-egress-review.html">DNS/Egress</a>
+</nav>
+<main>
+<section>
+<h2>Cluster Overview</h2>
+<pre>
+Proxmox Host (bao)
+├── VM 100: k3s-control   (192.168.2.100)
+├── VM 101: k3s-worker-1 (192.168.2.101)
+├── VM 102: k3s-worker-2 (192.168.2.102)
+├── VM 103: k3s-worker-3 (192.168.2.103)
+└── VM 9000: debian-12-cloud (template)
+</pre>
+</section>
+<section>
+<h2>Quick Links</h2>
+<ul>
+<li><a href="k8s-setup.html">k3s Setup Guide</a></li>
+<li><a href="preparation-guide.html">Interview Prep</a></li>
+<li><a href="glossary.html">Full Glossary</a></li>
+<li><a href="exercises.html">Hands-On Labs</a></li>
+</ul>
+</section>
+</main>
+<footer>
+<p>Built with Kimi on Proxmox VE</p>
+</footer>
+</body>
+</html>
