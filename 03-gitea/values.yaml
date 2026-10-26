@@ -1,0 +1,54 @@
+global:
+  security:
+    allowInsecureImages: true
+
+adminUsername: admin
+adminEmail: admin@example.com
+appName: Gitea
+existingSecret: gitea-admin
+
+image:
+  registry: docker.io
+  repository: bitnamilegacy/gitea
+
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 5Gi
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  pathType: Prefix
+  path: /
+  tls: false
+
+volumePermissions:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/os-shell
+
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+  auth:
+    username: gitea
+    database: gitea
+  primary:
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 5Gi
+  metrics:
+    image:
+      registry: docker.io
+      repository: bitnamilegacy/postgres-exporter
+  volumePermissions:
+    image:
+      registry: docker.io
+      repository: bitnamilegacy/os-shell
