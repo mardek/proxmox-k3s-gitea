@@ -2,37 +2,50 @@
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
-all_addresses=${K3S_ADDRESSES:-"192.168.2.100 192.168.2.101 192.168.2.102 192.168.2.103"}
-ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
 log() {
   printf '\n==> %s\n' "$*"
 }
 
-for address in $all_addresses; do
-  log "Installing Longhorn prerequisites on ${address}"
-  ssh-keygen -R "$address" >/dev/null 2>&1 || true
-  ssh "${ssh_options[@]}" "debian@${address}" \
-    'sudo apt-get update && sudo apt-get install -y open-iscsi nfs-common cryptsetup dmsetup && sudo systemctl enable --now iscsid'
-done
+log "Checking Longhorn prerequisites on the control plane"
+sudo apt-get update
+sudo apt-get install -y open-iscsi nfs-common cryptsetup dmsetup
+sudo systemctl enable --now iscsid
 
 log "Installing Longhorn 1.13.0"
-ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  'sudo helm repo add longhorn https://charts.longhorn.io --force-update && sudo helm repo update longhorn && sudo helm upgrade --install longhorn longhorn/longhorn --version 1.13.0 --namespace longhorn-system --create-namespace --wait --timeout 15m'
+sudo helm repo add longhorn https://charts.longhorn.io --force-update
+sudo helm repo update longhorn
+
+watch_longhorn_pods() {
+  while true; do
+    printf '\n--- Longhorn pod status (%s) ---\n' "$(date -u +%H:%M:%S)"
+    sudo kubectl -n longhorn-system get pods -o wide 2>/dev/null || true
+    sleep 15
+  done
+}
+
+watch_longhorn_pods &
+watcher_pid=$!
+trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
+sudo helm upgrade --install longhorn longhorn/longhorn \
+  --version 1.13.0 --namespace longhorn-system --create-namespace --wait --timeout 15m
+kill "$watcher_pid" 2>/dev/null || true
+wait "$watcher_pid" 2>/dev/null || true
+trap - EXIT
 
 log "Waiting for Longhorn controllers and node drivers"
-ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  'sudo kubectl -n longhorn-system wait --for=condition=Available deployment --all --timeout=15m && sudo kubectl -n longhorn-system rollout status daemonset --all --timeout=15m'
+sudo kubectl -n longhorn-system wait --for=condition=Available deployment --all --timeout=15m
+while read -r daemonset; do
+  sudo kubectl -n longhorn-system rollout status "$daemonset" --timeout=15m
+done < <(sudo kubectl -n longhorn-system get daemonset -o name)
 
 log "Creating the RWX StorageClass"
-ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo kubectl apply -f -' \
-  < "${script_dir}/storageclass.yaml"
+sudo kubectl apply -f - < "${script_dir}/storageclass.yaml"
 
 log "Setting longhorn as the default StorageClass"
-ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo kubectl patch storageclass longhorn -p '{\"metadata\":{\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
-ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo kubectl patch storageclass local-path -p '{\"metadata\":{\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"false\"}}}'"
+sudo kubectl patch storageclass longhorn \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+sudo kubectl patch storageclass local-path \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 
 log "Longhorn installation complete"

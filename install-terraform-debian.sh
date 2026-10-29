@@ -14,7 +14,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release
+apt-get install -y ca-certificates curl dpkg gnupg lsb-release
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://apt.releases.hashicorp.com/gpg \
   | gpg --dearmor --yes -o /etc/apt/keyrings/hashicorp-archive-keyring.gpg

@@ -22,7 +22,7 @@ refresh_host_key() {
 }
 
 log "Checking local prerequisites"
-for command_name in terraform ssh scp ssh-agent ssh-add ssh-keygen; do
+for command_name in terraform curl dpkg ssh scp ssh-agent ssh-add ssh-keygen; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     echo "${command_name} is required; install it before running this script" >&2
     exit 1
@@ -37,6 +37,10 @@ if [[ -z ${GITEA_ADMIN_PASSWORD:-} ]]; then
   echo "Set GITEA_ADMIN_PASSWORD before running this script" >&2
   exit 1
 fi
+
+log "Preparing the local Terraform provider mirror"
+"${script_dir}/01-vms/install-providers.sh"
+export TF_CLI_CONFIG_FILE="${script_dir}/01-vms/.terraform-provider-mirror/terraform.rc"
 
 log "Loading the SSH key and testing Proxmox access"
 eval "$(ssh-agent -s)" >/dev/null

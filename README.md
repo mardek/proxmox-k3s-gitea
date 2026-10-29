@@ -23,7 +23,8 @@ ssh-add ~/.ssh/id_ed25519
 # 2. Create VMs (Terraform)
 cp 01-vms/terraform.tfvars.example 01-vms/terraform.tfvars
 # edit 01-vms/terraform.tfvars
-terraform -chdir=01-vms init
+01-vms/install-providers.sh
+TF_CLI_CONFIG_FILE="$PWD/01-vms/.terraform-provider-mirror/terraform.rc" terraform -chdir=01-vms init
 terraform -chdir=01-vms apply
 
 # 3. Full deploy (includes Longhorn + Gitea)

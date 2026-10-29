@@ -13,7 +13,7 @@ log() {
 }
 
 log "Checking destruction prerequisites"
-for command_name in terraform ssh ssh-agent ssh-add ssh-keygen; do
+for command_name in terraform curl dpkg ssh ssh-agent ssh-add ssh-keygen; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     echo "${command_name} is required" >&2
     exit 1
@@ -34,7 +34,9 @@ ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
   "root@${proxmox_ssh_address}" 'echo SSH_OK'
 
 log "Preparing Terraform"
-terraform -chdir="${script_dir}/01-vms" init -input=false
+"${script_dir}/01-vms/install-providers.sh"
+TF_CLI_CONFIG_FILE="${script_dir}/01-vms/.terraform-provider-mirror/terraform.rc" \
+  terraform -chdir="${script_dir}/01-vms" init -input=false
 
 log "The next step will permanently delete all managed VMs, snippets, and local data"
 log "Review the destruction plan and type yes only if you intend to erase the environment"
