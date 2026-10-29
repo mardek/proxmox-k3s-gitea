@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Kubernetes, Helm, Longhorn, and Gitea command reference for the Proxmox K3s homelab.">
+  <title>K3s Homelab Command Reference</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --background: #f5f7fa;
+      --surface: #ffffff;
+      --surface-hover: #eef4ff;
+      --text: #172033;
+      --muted: #65728a;
+      --accent: #2457c5;
+      --accent-soft: #e8effc;
+      --code: #173f8f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--text);
+      font: 16px/1.6 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 4rem 0;
+    }
+
+    header { margin-bottom: 2.5rem; }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0.4rem 0;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+    }
+
+    .subtitle { color: var(--muted); max-width: 720px; }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1.5rem 0;
+      padding: 1.1rem 1.25rem;
+      background: var(--accent-soft);
+    }
+
+    code {
+      overflow-wrap: anywhere;
+      color: var(--code);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.9em;
+    }
+
+    .connection code { flex: 1; }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.9rem 1rem;
+      border: 0;
+      outline: 2px solid transparent;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+    }
+
+    input:focus { outline-color: var(--accent); }
+
+    .section-title {
+      margin: 2.5rem 0 0.75rem;
+      font-size: 1.15rem;
+      letter-spacing: -0.01em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+    }
+
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #e9edf3;
+      color: #46536a;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:nth-child(even) { background: #fafbfd; }
+    tbody tr:hover { background: var(--surface-hover); }
+
+    button {
+      padding: 0.4rem 0.7rem;
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    button:hover, button:focus-visible {
+      background: var(--accent-soft);
+      outline: none;
+    }
+
+    .empty {
+      display: none;
+      padding: 2rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    footer {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 700px) {
+      main { padding: 2rem 0; }
+      th:first-child { display: none; }
+      td:first-child { display: none; }
+      th, td { padding: 0.75rem; }
+      .connection { align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Proxmox · K3s · Longhorn · Gitea</div>
+      <h1>Homelab Command Reference</h1>
+      <p class="subtitle">Operational commands for inspecting the Kubernetes cluster, applications, Helm releases, and distributed storage.</p>
+      <div class="connection">
+        <span>Connect to the control plane</span>
+        <code>ssh debian@192.168.2.100</code>
+        <button type="button" data-copy="ssh debian@192.168.2.100">Copy</button>
+      </div>
+      <label for="search">Filter commands</label>
+      <input id="search" type="search" placeholder="Search pods, storage, logs, Helm…" autocomplete="off">
+    </header>
+
+    <section aria-labelledby="cluster-heading">
+      <h2 class="section-title" id="cluster-heading">Cluster and workloads</h2>
+      <table>
+        <thead><tr><th>Purpose</th><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>List cluster nodes</td><td><code>sudo kubectl get nodes</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Show node addresses and details</td><td><code>sudo kubectl get nodes -o wide</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Watch node status</td><td><code>sudo kubectl get nodes -w</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Describe worker 1</td><td><code>sudo kubectl describe node k3s-worker-1</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List namespaces</td><td><code>sudo kubectl get namespaces</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List all pods</td><td><code>sudo kubectl get pods -A</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Show pod IP and node placement</td><td><code>sudo kubectl get pods -A -o wide</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Watch all pods</td><td><code>sudo kubectl get pods -A -w</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Describe a pod</td><td><code>sudo kubectl -n NAMESPACE describe pod POD_NAME</code></td><td><button>Copy</button></td></tr>
+          <tr><td>View pod logs</td><td><code>sudo kubectl -n NAMESPACE logs POD_NAME</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Follow pod logs</td><td><code>sudo kubectl -n NAMESPACE logs POD_NAME -f</code></td><td><button>Copy</button></td></tr>
+          <tr><td>View recent cluster events</td><td><code>sudo kubectl get events -A --sort-by=.lastTimestamp</code></td><td><button>Copy</button></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="storage-heading">
+      <h2 class="section-title" id="storage-heading">Kubernetes and Longhorn storage</h2>
+      <table>
+        <thead><tr><th>Purpose</th><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>List StorageClasses</td><td><code>sudo kubectl get storageclass</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List PersistentVolumeClaims</td><td><code>sudo kubectl get pvc -A</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List PersistentVolumes</td><td><code>sudo kubectl get pv</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Describe a PVC</td><td><code>sudo kubectl -n NAMESPACE describe pvc PVC_NAME</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List Longhorn pods</td><td><code>sudo kubectl -n longhorn-system get pods -o wide</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Watch Longhorn pods</td><td><code>sudo kubectl -n longhorn-system get pods -w</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List Longhorn volumes</td><td><code>sudo kubectl -n longhorn-system get volumes.longhorn.io</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Show Longhorn replica placement</td><td><code>sudo kubectl -n longhorn-system get replicas.longhorn.io -o wide</code></td><td><button>Copy</button></td></tr>
+          <tr><td>List Longhorn share managers</td><td><code>sudo kubectl -n longhorn-system get sharemanager</code></td><td><button>Copy</button></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="gitea-heading">
+      <h2 class="section-title" id="gitea-heading">Gitea</h2>
+      <table>
+        <thead><tr><th>Purpose</th><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>List Gitea resources</td><td><code>sudo kubectl -n gitea get pods,pvc,svc,ingress -o wide</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Show Gitea pod placement</td><td><code>sudo kubectl -n gitea get pods -o wide</code></td><td><button>Copy</button></td></tr>
+          <tr><td>View Gitea application logs</td><td><code>sudo kubectl -n gitea logs deployment/gitea --tail=50</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Follow Gitea application logs</td><td><code>sudo kubectl -n gitea logs deployment/gitea -f</code></td><td><button>Copy</button></td></tr>
+          <tr><td>View PostgreSQL logs</td><td><code>sudo kubectl -n gitea logs statefulset/gitea-postgresql --tail=50</code></td><td><button>Copy</button></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="tools-heading">
+      <h2 class="section-title" id="tools-heading">Helm and K9s</h2>
+      <table>
+        <thead><tr><th>Purpose</th><th>Command</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>List Helm releases</td><td><code>sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm list -A</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Show Gitea Helm status</td><td><code>sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm status gitea -n gitea</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Show Longhorn Helm status</td><td><code>sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm status longhorn -n longhorn-system</code></td><td><button>Copy</button></td></tr>
+          <tr><td>Open interactive Kubernetes UI</td><td><code>sudo k9s</code></td><td><button>Copy</button></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="empty" id="empty">No matching commands found.</p>
+    <footer>Replace NAMESPACE, POD_NAME, and PVC_NAME placeholders with values from your cluster.</footer>
+  </main>
+
+  <script>
+    const search = document.querySelector('#search');
+    const rows = [...document.querySelectorAll('tbody tr')];
+    const empty = document.querySelector('#empty');
+
+    search.addEventListener('input', () => {
+      const query = search.value.trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const matches = row.textContent.toLowerCase().includes(query);
+        row.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      empty.style.display = visible ? 'none' : 'block';
+    });
+
+    document.addEventListener('click', async (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      const command = button.dataset.copy || button.closest('tr').querySelector('code').textContent;
+      try {
+        await navigator.clipboard.writeText(command);
+        button.textContent = 'Copied';
+        setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+      } catch {
+        button.textContent = 'Select command';
+      }
+    });
+  </script>
+</body>
+</html>
