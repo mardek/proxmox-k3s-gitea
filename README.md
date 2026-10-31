@@ -4,13 +4,127 @@ Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via
 
 ## Architecture
 
+### Deployment and cluster
+
 ```
-Proxmox Host (bao)
-├── VM 100: k3s-control   (192.168.2.100) — control plane
-├── VM 101: k3s-worker-1  (192.168.2.101)
-├── VM 102: k3s-worker-2  (192.168.2.102)
-├── VM 103: k3s-worker-3  (192.168.2.103)
-└── VM 9000: debian-12-cloud (template)
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Debian administration VM                                                  │
+│                                                                            │
+│ deploy.sh ──► Terraform ──► Proxmox VMs                                   │
+│     │                                                                      │
+│     └── SSH ──► Helm, K9s, Longhorn, and Gitea installation               │
+│                                                                            │
+│ diagnose.sh: health checks       run.sh: Gitea port-forward                │
+└──────────────────────────────────┬─────────────────────────────────────────┘
+                                   │ Proxmox API + SSH
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Proxmox host: bao — 192.168.2.22                                           │
+│                                                                            │
+│ VM 9000: debian-12-cloud template                                          │
+│                                                                            │
+│ ┌────────────────────────────────────────────────────────────────────────┐ │
+│ │ K3s cluster                                                           │ │
+│ │                                                                        │ │
+│ │ ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐  │ │
+│ │ │ VM 100              │  │ VM 101              │  │ VM 102          │  │ │
+│ │ │ k3s-control         │  │ k3s-worker-1        │  │ k3s-worker-2    │  │ │
+│ │ │ 192.168.2.100       │  │ 192.168.2.101       │  │ 192.168.2.102   │  │ │
+│ │ │                     │  │                     │  │                 │  │ │
+│ │ │ Kubernetes API      │  │ K3s agent           │  │ K3s agent       │  │ │
+│ │ │ Scheduler           │  │ Application pods    │  │ Application pods│  │ │
+│ │ │ Helm and K9s        │  │ Longhorn storage    │  │ Longhorn storage│  │ │
+│ │ │ Longhorn storage    │  └─────────────────────┘  └─────────────────┘  │ │
+│ │ └─────────────────────┘                                                  │ │
+│ │                         ┌─────────────────────┐                          │ │
+│ │                         │ VM 103              │                          │ │
+│ │                         │ k3s-worker-3        │                          │ │
+│ │                         │ 192.168.2.103       │                          │ │
+│ │                         │ K3s agent           │                          │ │
+│ │                         │ Application pods    │                          │ │
+│ │                         │ Longhorn storage    │                          │ │
+│ │                         └─────────────────────┘                          │ │
+│ └────────────────────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────────────┘
+
+Kubernetes system services:
+CoreDNS • Traefik ingress • ServiceLB • metrics-server • local-path provisioner
+```
+
+### Applications and distributed storage
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Gitea namespace                                                            │
+│                                                                            │
+│ Gitea deployment ───────────────► PostgreSQL StatefulSet                   │
+│       │                                    │                               │
+│       ▼                                    ▼                               │
+│  5 Gi PVC                             5 Gi PVC                             │
+│       │                                    │                               │
+│       └────────────────┬───────────────────┘                               │
+│                        ▼                                                   │
+│             Longhorn dynamic provisioning                                  │
+└────────────────────────┬───────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Longhorn: managers, CSI drivers, and storage on all four nodes             │
+│                                                                            │
+│ Each volume has three replicas on separate nodes.                          │
+│ The control plane can also hold replicas.                                  │
+│                                                                            │
+│ Example volume:                                                            │
+│   Replica A ──► k3s-worker-1:/var/lib/longhorn/                            │
+│   Replica B ──► k3s-worker-2:/var/lib/longhorn/                            │
+│   Replica C ──► k3s-worker-3:/var/lib/longhorn/                            │
+│                                                                            │
+│ StorageClasses:                                                            │
+│   longhorn      ReadWriteOnce, three replicas, default                     │
+│   longhorn-rwx  ReadWriteMany, three replicas                              │
+│   local-path    Single-node storage, not replicated                        │
+└────────────────────────────────────────────────────────────────────────────┘
+
+User ──► run.sh SSH port-forward ──► Gitea ClusterIP Service ──► Gitea pod
+         http://192.168.2.100:8080
+
+Optional: User ──► Traefik Ingress ──► Gitea Service ──► Gitea pod
+```
+
+### Worker failure and recovery
+
+```
+Before: three healthy replicas and a Gitea pod on worker 2
+
+  k3s-control ──► worker 1: replica A
+       │        worker 2: replica B + Gitea pod
+       │        worker 3: replica C
+       ▼
+  Kubernetes API and scheduler
+
+
+Worker 2 powered off:
+
+  k3s-control     worker 1        worker 2         worker 3
+  Available       Replica A       POWERED OFF      Replica C
+                                  Replica B and
+                                  Gitea unavailable
+
+  Volume: degraded but usable with two remaining replicas.
+
+
+After recovery:
+
+  k3s-control detects the failure and reschedules Gitea
+                         │
+                         ▼
+                  Gitea pod on worker 3
+                         │
+                         ▼
+       Longhorn attaches the existing replicated volume
+
+  Repository data is preserved. When worker 2 returns, Longhorn restores
+  its replica and the volume returns to a healthy state.
 ```
 
 ## Quick Start
