@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ruby-builder-${WORKER_NAME}
+  namespace: gentoo-ruby
+spec:
+  serviceName: ruby-builder-${WORKER_NAME}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ruby-builder
+      worker: ${WORKER_NAME}
+  template:
+    metadata:
+      labels:
+        app: ruby-builder
+        worker: ${WORKER_NAME}
+    spec:
+      nodeName: ${WORKER_NAME}
+      containers:
+        - name: gentoo
+          image: ${GENTOO_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/ruby-build/entrypoint.sh]
+          env:
+            - name: WORKER_NAME
+              value: ${WORKER_NAME}
+            - name: ACT_RUNNER_VERSION
+              value: ${ACT_RUNNER_VERSION}
+            - name: ACT_RUNNER_SHA256
+              value: ${ACT_RUNNER_SHA256}
+            - name: RUBY_VERSION
+              value: ${RUBY_VERSION}
+            - name: DASHBOARD_URL
+              value: http://ruby-build-dashboard:8080
+            - name: GITEA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-credentials
+                  key: GITEA_URL
+            - name: GITEA_RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-credentials
+                  key: GITEA_RUNNER_TOKEN
+            - name: GITEA_PUBLISH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-credentials
+                  key: GITEA_PUBLISH_TOKEN
+            - name: GITEA_REPOSITORY
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-runner-credentials
+                  key: GITEA_REPOSITORY
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: scripts
+              mountPath: /opt/ruby-build
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: scripts
+          configMap:
+            name: ruby-build-scripts
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 5Gi

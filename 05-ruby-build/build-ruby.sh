@@ -1,0 +1,117 @@
+#!/bin/bash
+set -euo pipefail
+
+build_id="$(date -u +%Y%m%dT%H%M%SZ)-${WORKER_NAME}"
+work_dir="/data/builds/$build_id"
+mkdir -p "$work_dir"
+cd "$work_dir"
+
+series=${RUBY_VERSION%.*}
+archive="ruby-${RUBY_VERSION}.tar.xz"
+source_dir="ruby-${RUBY_VERSION}"
+started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+printf '\n==> Building Ruby %s on %s\n' "$RUBY_VERSION" "$WORKER_NAME"
+/usr/bin/time -v -o download.time \
+  curl -fL --retry 4 "https://cache.ruby-lang.org/pub/ruby/${series}/${archive}" -o "$archive"
+tar -xf "$archive"
+(
+  cd "$source_dir"
+  /usr/bin/time -v -o ../configure.time \
+    ./configure --prefix="/opt/ruby-${RUBY_VERSION}"
+  /usr/bin/time -v -o ../compile.time make -j"$(nproc)"
+  /usr/bin/time -v -o ../test.time make check
+)
+
+cp "${source_dir}/ruby" "ruby-${RUBY_VERSION}-linux-amd64"
+sha256sum "$archive" "ruby-${RUBY_VERSION}-linux-amd64" > SHA256SUMS
+
+export BUILD_ID="$build_id" STARTED_AT="$started_at" FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python3 - <<'PY'
+import json
+import os
+import re
+from pathlib import Path
+
+root = Path.cwd()
+
+def elapsed(value):
+    parts = [float(part) for part in value.split(':')]
+    seconds = 0
+    for part in parts:
+        seconds = seconds * 60 + part
+    return seconds
+
+def timing(name):
+    text = (root / f'{name}.time').read_text()
+    wall = re.search(r'Elapsed \(wall clock\) time.*: (.*)', text).group(1).strip()
+    cpu = re.search(r'Percent of CPU this job got: (\d+)%', text)
+    memory = re.search(r'Maximum resident set size \(kbytes\): (\d+)', text)
+    return {
+        'seconds': elapsed(wall),
+        'cpu_percent': int(cpu.group(1)) if cpu else None,
+        'max_memory_kib': int(memory.group(1)) if memory else None,
+    }
+
+metrics = {
+    'build_id': os.environ['BUILD_ID'],
+    'worker': os.environ['WORKER_NAME'],
+    'ruby_version': os.environ['RUBY_VERSION'],
+    'status': 'success',
+    'started_at': os.environ['STARTED_AT'],
+    'finished_at': os.environ['FINISHED_AT'],
+    'stages': {name: timing(name) for name in ('download', 'configure', 'compile', 'test')},
+    'binary_bytes': (root / f"ruby-{os.environ['RUBY_VERSION']}-linux-amd64").stat().st_size,
+}
+(root / 'metrics.json').write_text(json.dumps(metrics, indent=2) + '\n')
+compile_time = metrics['stages']['compile']['seconds']
+test_time = metrics['stages']['test']['seconds']
+rows = ''.join(
+    f"<tr><td>{name}</td><td>{values['seconds']:.2f} s</td><td>{values['cpu_percent'] or 'n/a'}%</td><td>{values['max_memory_kib'] or 'n/a'} KiB</td></tr>"
+    for name, values in metrics['stages'].items()
+)
+html = f'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>{metrics['build_id']}</title><style>
+body{{font:16px system-ui;max-width:1000px;margin:40px auto;padding:0 20px;color:#172033;background:#f5f7fa}}
+main{{background:white;padding:30px}}table{{border-collapse:collapse;width:100%}}td,th{{padding:10px;text-align:left}}th{{background:#e9edf3}}.ok{{color:#18794e}}code{{color:#173f8f}}
+</style></head><body><main><h1>Ruby {metrics['ruby_version']} build</h1>
+<p class="ok">Successful</p><p><code>{metrics['build_id']}</code></p>
+<p>Worker: {metrics['worker']}<br>Started: {metrics['started_at']}<br>Finished: {metrics['finished_at']}</p>
+<h2>Metrics</h2><table><tr><th>Stage</th><th>Duration</th><th>CPU</th><th>Peak memory</th></tr>{rows}</table>
+<p>Compilation: {compile_time:.2f} seconds; tests: {test_time:.2f} seconds; binary: {metrics['binary_bytes']:,} bytes.</p>
+</main></body></html>'''
+(root / 'build-report.html').write_text(html)
+PY
+
+if [[ -n ${DASHBOARD_URL:-} ]]; then
+  curl -fsS -X PUT --data-binary @metrics.json "${DASHBOARD_URL}/metrics/${WORKER_NAME}.json"
+  curl -fsS -X PUT --data-binary @build-report.html "${DASHBOARD_URL}/reports/${WORKER_NAME}.html"
+fi
+
+if [[ -n ${GITEA_PUBLISH_TOKEN:-} && -n ${GITEA_REPOSITORY:-} ]]; then
+  tag="ruby-${RUBY_VERSION}-${build_id}"
+  python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+Path('release.json').write_text(json.dumps({
+    'tag_name': f"ruby-{os.environ['RUBY_VERSION']}-{os.environ['BUILD_ID']}",
+    'name': f"Ruby {os.environ['RUBY_VERSION']} · {os.environ['WORKER_NAME']} · {os.environ['BUILD_ID']}",
+    'body': f"Built and tested on {os.environ['WORKER_NAME']}. See metrics.json and build-report.html.",
+    'draft': False,
+    'prerelease': False,
+}))
+PY
+  response=$(curl -fsS -H "Authorization: token ${GITEA_PUBLISH_TOKEN}" \
+    -H 'Content-Type: application/json' --data-binary @release.json \
+    "${GITEA_URL}/api/v1/repos/${GITEA_REPOSITORY}/releases")
+  upload_url=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["upload_url"])')
+  for asset in "$archive" "ruby-${RUBY_VERSION}-linux-amd64" SHA256SUMS metrics.json build-report.html; do
+    curl -fsS -H "Authorization: token ${GITEA_PUBLISH_TOKEN}" \
+      -H 'Content-Type: application/octet-stream' --data-binary "@$asset" \
+      "${upload_url}?name=$asset" >/dev/null
+  done
+fi
+
+printf '\n==> Build %s completed successfully\n' "$build_id"

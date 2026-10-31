@@ -123,12 +123,13 @@ TF_CLI_CONFIG_FILE="$PWD/01-vms/.terraform-provider-mirror/terraform.rc" terrafo
 terraform -chdir=01-vms apply
 
 # 3. Full deploy (includes Longhorn + Gitea)
-export GITEA_ADMIN_PASSWORD='choose-strong-password'
 ./deploy.sh
 
 # 4. Access Gitea
 ./run.sh
 ```
+
+Both deployment scripts prompt for missing credentials and save them locally with owner-only permissions. Missing exports are also appended to existing `.bashrc` and `.zshrc` files. Use `./deploy.sh --reconfigure` or `./deploy-ruby.sh --reconfigure` to replace saved values, and `--help` for each script's manual.
 
 ## Repository Layout
 
@@ -138,7 +139,9 @@ export GITEA_ADMIN_PASSWORD='choose-strong-password'
 | `02-kubernetes/` | Cluster readiness, Helm + K9s install |
 | `03-gitea/` | Gitea Helm deployment |
 | `04-longhorn/` | Longhorn distributed storage |
+| `05-ruby-build/` | Gentoo Ruby builders, Gitea runners, and metrics dashboard |
 | `deploy.sh` | One-shot deploy from scratch |
+| `deploy-ruby.sh` | Deploy three Ruby builders and the metrics dashboard |
 | `destroy.sh` | Complete teardown |
 | `diagnose.sh` | Health check all layers |
 | `run.sh` | Port-forward to access Gitea |

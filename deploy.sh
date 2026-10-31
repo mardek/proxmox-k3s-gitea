@@ -2,9 +2,86 @@
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-if [[ -f "${script_dir}/.proxmox-env" ]]; then
-  source "${script_dir}/.proxmox-env"
+config_file=${PROXMOX_DEPLOY_CONFIG:-${script_dir}/.proxmox-env}
+reconfigure=false
+
+usage() {
+  cat <<'EOF'
+Usage: ./deploy.sh [--reconfigure]
+       ./deploy.sh -h | --help
+
+Create the Proxmox VMs, install K3s and Longhorn, and deploy Gitea.
+Missing settings are requested interactively and saved in .proxmox-env
+with owner-only permissions. Exports are also added to existing .bashrc and
+.zshrc files when absent. Later runs reuse the saved values automatically.
+
+Options:
+  --reconfigure  Prompt for every setting, including previously saved values.
+  -h, --help     Show this manual.
+
+Saved settings:
+  PROXMOX_VE_API_TOKEN  Proxmox API token in user@realm!name=uuid format.
+  GITEA_ADMIN_PASSWORD  Password for the Gitea administrator account.
+
+Environment overrides:
+  PROXMOX_DEPLOY_CONFIG  Alternate settings file path.
+  PROXMOX_SSH_ADDRESS    Proxmox SSH address (default: 192.168.2.22).
+  CONTROL_PLANE_ADDRESS  Control-plane SSH address (default: 192.168.2.100).
+  GITEA_HOST             Optional public Gitea hostname.
+
+Secrets are hidden while typing. Environment variables take precedence over
+saved values. Use --reconfigure after rotating credentials.
+EOF
+}
+
+while (($#)); do
+  case $1 in
+    -h|--help) usage; exit 0 ;;
+    --reconfigure) reconfigure=true ;;
+    *) printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if [[ -f $config_file ]]; then
+  # shellcheck source=/dev/null
+  source "$config_file"
 fi
+
+for variable in PROXMOX_VE_API_TOKEN GITEA_ADMIN_PASSWORD; do
+  current=${!variable:-}
+  if [[ $reconfigure != true && -n $current ]]; then
+    continue
+  fi
+  read -rsp "$variable${current:+ [saved; press Enter to keep]}: " value
+  printf '\n'
+  if [[ -z $value ]]; then
+    value=$current
+  fi
+  if [[ -z $value ]]; then
+    echo "$variable is required" >&2
+    exit 1
+  fi
+  printf -v "$variable" '%s' "$value"
+  export "$variable"
+done
+
+umask 077
+{
+  printf 'export PROXMOX_VE_API_TOKEN=%q\n' "$PROXMOX_VE_API_TOKEN"
+  printf 'export GITEA_ADMIN_PASSWORD=%q\n' "$GITEA_ADMIN_PASSWORD"
+  printf 'export PROXMOX_SSH_ADDRESS=%q\n' "${PROXMOX_SSH_ADDRESS:-192.168.2.22}"
+  printf 'export CONTROL_PLANE_ADDRESS=%q\n' "${CONTROL_PLANE_ADDRESS:-192.168.2.100}"
+  printf 'export GITEA_HOST=%q\n' "${GITEA_HOST:-}"
+} > "$config_file"
+for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [[ -f $rc_file ]] || continue
+  for variable in PROXMOX_VE_API_TOKEN GITEA_ADMIN_PASSWORD; do
+    if ! grep -qE "^[[:space:]]*(export[[:space:]]+)?${variable}=" "$rc_file"; then
+      printf 'export %s=%q\n' "$variable" "${!variable}" >> "$rc_file"
+    fi
+  done
+done
 
 proxmox_ssh_address=${PROXMOX_SSH_ADDRESS:-192.168.2.22}
 control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}

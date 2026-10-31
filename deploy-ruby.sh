@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+namespace=gentoo-ruby
+workers=(k3s-worker-1 k3s-worker-2 k3s-worker-3)
+config_file=${RUBY_BUILD_CONFIG:-${script_dir}/.ruby-build.env}
+reconfigure=false
+
+usage() {
+  cat <<'EOF'
+Usage: ./deploy-ruby.sh [--reconfigure]
+       ./deploy-ruby.sh -h | --help
+
+Deploy three Gentoo Ruby builders and the metrics dashboard on K3s.
+Missing settings are requested interactively and saved in .ruby-build.env
+with owner-only permissions. Exports are also added to existing .bashrc and
+.zshrc files when absent. Later runs reuse the saved values automatically.
+
+Options:
+  --reconfigure  Prompt for every setting, including previously saved values.
+  -h, --help   Show this manual.
+
+Saved settings:
+  GITEA_URL             URL reachable from pods, including http:// or https://.
+                        Cluster example: http://gitea.gitea.svc.cluster.local
+  GITEA_REPOSITORY      Release repository in owner/repository format.
+                        Example: admin/ruby
+  GITEA_RUNNER_TOKEN    Registration token from the repository's Actions settings.
+  GITEA_PUBLISH_TOKEN   Access token allowed to create releases and upload assets.
+
+Environment overrides:
+  RUBY_BUILD_CONFIG     Alternate settings file path.
+  RUBY_VERSION          Ruby version to build (default: 3.4.11).
+  CONTROL_PLANE_ADDRESS Control-plane SSH address (default: 192.168.2.100).
+
+Tokens are hidden while typing. Environment variables take precedence over
+saved values. Use --reconfigure after rotating tokens or changing repositories.
+EOF
+}
+
+while (($#)); do
+  case $1 in
+    -h|--help) usage; exit 0 ;;
+    --reconfigure) reconfigure=true ;;
+    *) printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if [[ ${RUBY_DEPLOY_REMOTE:-false} != true && -f $config_file ]]; then
+  # shellcheck source=/dev/null
+  source "$config_file"
+fi
+
+if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
+  for variable in GITEA_URL GITEA_REPOSITORY GITEA_RUNNER_TOKEN GITEA_PUBLISH_TOKEN; do
+    current=${!variable:-}
+    if [[ $reconfigure != true && -n $current ]]; then
+      continue
+    fi
+    if [[ $variable == *_TOKEN ]]; then
+      read -rsp "$variable${current:+ [saved; press Enter to keep]}: " value
+      printf '\n'
+    else
+      read -rp "$variable${current:+ [$current]}: " value
+    fi
+    if [[ -z $value ]]; then
+      value=$current
+    fi
+    if [[ -z $value ]]; then
+      echo "$variable is required" >&2
+      exit 1
+    fi
+    printf -v "$variable" '%s' "$value"
+    export "$variable"
+  done
+fi
+
+for variable in GITEA_URL GITEA_RUNNER_TOKEN GITEA_PUBLISH_TOKEN GITEA_REPOSITORY; do
+  if [[ -z ${!variable:-} ]]; then
+    echo "Set $variable before running this script" >&2
+    exit 1
+  fi
+done
+if [[ ! ${GITEA_URL} =~ ^https?:// ]]; then
+  echo "GITEA_URL must include http:// or https://" >&2
+  exit 1
+fi
+if [[ ${GITEA_REPOSITORY} != */* ]]; then
+  echo "GITEA_REPOSITORY must use owner/repository format" >&2
+  exit 1
+fi
+
+if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
+  umask 077
+  {
+    printf 'export GITEA_URL=%q\n' "$GITEA_URL"
+    printf 'export GITEA_REPOSITORY=%q\n' "$GITEA_REPOSITORY"
+    printf 'export GITEA_RUNNER_TOKEN=%q\n' "$GITEA_RUNNER_TOKEN"
+    printf 'export GITEA_PUBLISH_TOKEN=%q\n' "$GITEA_PUBLISH_TOKEN"
+  } > "$config_file"
+  for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    [[ -f $rc_file ]] || continue
+    for variable in GITEA_URL GITEA_REPOSITORY GITEA_RUNNER_TOKEN GITEA_PUBLISH_TOKEN; do
+      if ! grep -qE "^[[:space:]]*(export[[:space:]]+)?${variable}=" "$rc_file"; then
+        printf 'export %s=%q\n' "$variable" "${!variable}" >> "$rc_file"
+      fi
+    done
+  done
+fi
+
+if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
+  control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
+  remote_dir=/tmp/ruby-build-deploy
+  ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+  for command_name in ssh scp; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      echo "$command_name is required" >&2
+      exit 1
+    fi
+  done
+  ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+    "mkdir -p '${remote_dir}/05-ruby-build'"
+  scp -q "${ssh_options[@]}" "${script_dir}/deploy-ruby.sh" \
+    "debian@${control_plane_address}:${remote_dir}/deploy-ruby.sh"
+  scp -q "${ssh_options[@]}" "${script_dir}/05-ruby-build/"* \
+    "debian@${control_plane_address}:${remote_dir}/05-ruby-build/"
+  {
+    printf 'export GITEA_URL=%q\n' "$GITEA_URL"
+    printf 'export GITEA_RUNNER_TOKEN=%q\n' "$GITEA_RUNNER_TOKEN"
+    printf 'export GITEA_PUBLISH_TOKEN=%q\n' "$GITEA_PUBLISH_TOKEN"
+    printf 'export GITEA_REPOSITORY=%q\n' "$GITEA_REPOSITORY"
+    printf 'export GENTOO_IMAGE=%q\n' "${GENTOO_IMAGE:-gentoo/stage3:latest}"
+    printf 'export ACT_RUNNER_VERSION=%q\n' "${ACT_RUNNER_VERSION:-0.2.12}"
+    printf 'export ACT_RUNNER_SHA256=%q\n' "${ACT_RUNNER_SHA256:-be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a22e34ba11e}"
+    printf 'export RUBY_VERSION=%q\n' "${RUBY_VERSION:-3.4.11}"
+    printf 'RUBY_DEPLOY_REMOTE=true bash %q\n' "${remote_dir}/deploy-ruby.sh"
+  } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
+  exit
+fi
+
+for command_name in kubectl curl; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "$command_name is required on k3s-control" >&2
+    exit 1
+  fi
+done
+
+log() {
+  printf '\n==> %s\n' "$*"
+}
+
+log "Creating the Ruby build namespace and dashboard"
+kubectl apply -f "${script_dir}/05-ruby-build/dashboard.yaml"
+
+log "Installing build scripts and runner credentials"
+kubectl -n "$namespace" create configmap ruby-build-scripts \
+  --from-file=entrypoint.sh="${script_dir}/05-ruby-build/entrypoint.sh" \
+  --from-file=build-ruby.sh="${script_dir}/05-ruby-build/build-ruby.sh" \
+  --from-file=dashboard.py="${script_dir}/05-ruby-build/dashboard.py" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "$namespace" rollout restart deployment/ruby-build-dashboard
+kubectl -n "$namespace" create secret generic gitea-runner-credentials \
+  --from-literal=GITEA_URL="$GITEA_URL" \
+  --from-literal=GITEA_RUNNER_TOKEN="$GITEA_RUNNER_TOKEN" \
+  --from-literal=GITEA_PUBLISH_TOKEN="$GITEA_PUBLISH_TOKEN" \
+  --from-literal=GITEA_REPOSITORY="$GITEA_REPOSITORY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+for worker in "${workers[@]}"; do
+  log "Deploying Gentoo builder on $worker"
+  manifest=$(<"${script_dir}/05-ruby-build/gentoo-builder.yaml")
+  manifest=${manifest//'${WORKER_NAME}'/$worker}
+  manifest=${manifest//'${GENTOO_IMAGE}'/${GENTOO_IMAGE:-gentoo/stage3:latest}}
+  manifest=${manifest//'${ACT_RUNNER_VERSION}'/${ACT_RUNNER_VERSION:-0.2.12}}
+  manifest=${manifest//'${ACT_RUNNER_SHA256}'/${ACT_RUNNER_SHA256:-be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a22e34ba11e}}
+  manifest=${manifest//'${RUBY_VERSION}'/${RUBY_VERSION:-3.4.11}}
+  kubectl apply -f - <<<"$manifest"
+  kubectl -n "$namespace" rollout restart "statefulset/ruby-builder-$worker"
+done
+
+log "Waiting for the dashboard"
+kubectl -n "$namespace" rollout status deployment/ruby-build-dashboard --timeout=5m
+for worker in "${workers[@]}"; do
+  log "Waiting for $worker; Gentoo dependency installation can take time"
+  kubectl -n "$namespace" rollout status "statefulset/ruby-builder-$worker" --timeout=30m
+done
+
+cat <<EOF
+
+Ruby builders are running. Initial builds continue inside the pods.
+
+Dashboard: http://192.168.2.100:30080
+Pod status: kubectl -n $namespace get pods -o wide
+Build logs: kubectl -n $namespace logs ruby-builder-${workers[0]}-0 -f
+EOF

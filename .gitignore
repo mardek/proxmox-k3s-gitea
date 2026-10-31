@@ -1,2 +1,4 @@
 .terraform/
 .terraform-provider-mirror/
+.ruby-build.env
+.proxmox-env

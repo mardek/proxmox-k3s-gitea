@@ -1,0 +1,17 @@
+name: Build Ruby with metrics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  ruby:
+    strategy:
+      matrix:
+        worker: [k3s-worker-1, k3s-worker-2, k3s-worker-3]
+    runs-on: ${{ matrix.worker }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Ruby and publish metrics
+        run: /opt/ruby-build/build-ruby.sh
