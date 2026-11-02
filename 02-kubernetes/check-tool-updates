@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+latest_version() {
+  local repository=$1
+  curl -fsSL --connect-timeout 10 --max-time 30 \
+    "https://api.github.com/repos/${repository}/releases/latest" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))'
+}
+
+check_version() {
+  local name=$1 repository=$2 current=$3 latest
+  if ! latest=$(latest_version "$repository"); then
+    echo "Could not check $name updates"
+    return
+  fi
+  if [[ $current == "$latest" ]]; then
+    echo "$name $current is up to date"
+  else
+    echo "$name update available: $current -> $latest (installed version retained)"
+  fi
+}
+
+if command -v helm >/dev/null 2>&1; then
+  helm_version=$(helm version --short 2>/dev/null)
+  helm_version=${helm_version#v}
+  helm_version=${helm_version%%+*}
+  check_version Helm helm/helm "$helm_version"
+fi
+
+if command -v k9s >/dev/null 2>&1; then
+  k9s_version=$(k9s version 2>/dev/null)
+  if [[ $k9s_version =~ Version:[[:space:]]+v([^[:space:]]+) ]]; then
+    check_version K9s derailed/k9s "${BASH_REMATCH[1]}"
+  fi
+fi

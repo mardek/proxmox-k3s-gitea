@@ -4,10 +4,11 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 config_file=${PROXMOX_DEPLOY_CONFIG:-${script_dir}/.proxmox-env}
 reconfigure=false
+check_updates=false
 
 usage() {
   cat <<'EOF'
-Usage: ./deploy [--reconfigure]
+Usage: ./deploy [--reconfigure] [--check-updates]
        ./deploy -h | --help
 
 Create the Proxmox VMs, install K3s and Longhorn, and deploy Gitea.
@@ -16,8 +17,9 @@ with owner-only permissions. Exports are also added to existing .bashrc and
 .zshrc files when absent. Later runs reuse the saved values automatically.
 
 Options:
-  --reconfigure  Prompt for every setting, including previously saved values.
-  -h, --help     Show this manual.
+  --reconfigure    Prompt for every setting, including previously saved values.
+  --check-updates  Report newer Helm and K9s releases without upgrading them.
+  -h, --help       Show this manual.
 
 Saved settings:
   PROXMOX_VE_API_TOKEN  Proxmox API token in user@realm!name=uuid format.
@@ -38,6 +40,7 @@ while (($#)); do
   case $1 in
     -h|--help) usage; exit 0 ;;
     --reconfigure) reconfigure=true ;;
+    --check-updates) check_updates=true ;;
     *) printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
   shift
@@ -167,6 +170,13 @@ ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
 log "Checking K9s on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo '${remote_dir}/02-kubernetes/install-k9s'"
+
+if [[ $check_updates == true ]]; then
+  log "Checking for Helm and K9s updates"
+  ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+    "sudo '${remote_dir}/02-kubernetes/check-tool-updates'" || \
+    echo 'Update check unavailable; continuing with installed versions'
+fi
 
 log "Installing Longhorn distributed storage"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \

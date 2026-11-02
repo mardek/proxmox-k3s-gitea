@@ -25,7 +25,7 @@ ssh-add ~/.ssh/id_ed25519
 
 Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts for the Proxmox API token and Gitea administrator password. Settings are saved in `.proxmox-env` with owner-only permissions and reused on later runs. Missing exports are also appended to existing `.bashrc` and `.zshrc` files.
 
-Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` for all options.
+Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` for all options. Helm and K9s are reinstalled only when their required versions are missing or different. To report newer upstream releases without upgrading them, run `./deploy --check-updates`; normal deployments do not perform update checks.
 
 ### Manage Gitea access
 
