@@ -198,7 +198,7 @@ cat <<EOF
 
 Ruby builders are running. Initial builds continue inside the pods.
 
-Dashboard: http://192.168.2.100:30080
+Dashboard: http://${control_plane_address}:30080
 Pod status: kubectl -n $namespace get pods -o wide
 Build logs: kubectl -n $namespace logs ruby-builder-${workers[0]}-0 -f
 EOF

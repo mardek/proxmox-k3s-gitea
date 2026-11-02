@@ -166,8 +166,8 @@
       <p class="subtitle">Operational commands for inspecting the Kubernetes cluster, applications, Helm releases, and distributed storage.</p>
       <div class="connection">
         <span>Connect to the control plane</span>
-        <code>ssh debian@192.168.2.100</code>
-        <button type="button" data-copy="ssh debian@192.168.2.100">Copy</button>
+        <code>ssh debian@{{CONTROL_PLANE_ADDRESS}}</code>
+        <button type="button" data-copy="ssh debian@{{CONTROL_PLANE_ADDRESS}}">Copy</button>
       </div>
       <label for="search">Filter commands</label>
       <input id="search" type="search" placeholder="Search pods, storage, logs, Helm…" autocomplete="off">

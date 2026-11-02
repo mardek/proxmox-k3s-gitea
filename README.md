@@ -38,7 +38,11 @@ Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` 
 ./run --help      # Manual and environment overrides
 ```
 
-Open `http://192.168.2.100:8090` for the service index, which links to Gitea, Prometheus, Longhorn, Grafana, the Ruby dashboard, Proxmox, and the Kubernetes command reference. Separate background PID and log files are stored in `~/.local/state/proxmox-k3s-gitea/`. All access processes survive SSH logout.
+Open `http://192.168.2.41:8090` for Main Access, which links to every service and embeds an authenticated xterm.js terminal above the Kubernetes command reference. Install its backend once with `sudo apt-get install ttyd`. Sign in as `admin` using `GITEA_ADMIN_PASSWORD`, or set `TERMINAL_PASSWORD` to override it. The writable terminal runs with the privileges of the user who started `run`; keep it on the trusted lab network and never expose it publicly.
+
+`./deploy` asks for `PROXMOX_SSH_ADDRESS` and `CONTROL_PLANE_ADDRESS` when they are not configured and includes them during `--reconfigure`. Main Access and its command examples are generated from these addresses, the discovered administration-VM address (`DOCS_HOST`), and the configured service ports. Set `DOCS_HOST` when automatic discovery should be overridden. No web-page edits are needed when the lab moves to another network.
+
+Port-forwards run as `k3s-access-*` systemd services on `k3s-control`, so they survive SSH logout and restart automatically without leaving orphaned SSH processes. The documentation and terminal servers keep their PID and log files in `~/.local/state/proxmox-k3s-gitea/`.
 
 ### Prometheus and Grafana
 
@@ -52,7 +56,7 @@ To reinstall only monitoring, copy `06-monitoring/` to the control plane and run
 
 | Service | Address or port | Access method |
 |---------|-----------------|---------------|
-| Service index and command reference | `http://192.168.2.100:8090` | Local web server started by `./run start` |
+| Service index and command reference | `http://192.168.2.41:8090` | Local web server started by `./run start` |
 | Proxmox | `https://192.168.2.22:8006` | Direct web interface |
 | Gitea | `http://192.168.2.100:8080` | Start with `./run start` |
 | Ruby build dashboard | `http://192.168.2.100:30080` | Start with `./run start` after `./deploy-ruby` |

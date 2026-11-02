@@ -25,18 +25,18 @@
   <h1>K3s Lab</h1>
   <p class="intro">Service access and operating guides</p>
   <nav class="services" aria-label="Service access">
-    <a class="service" href="http://192.168.2.100:8080"><strong>Gitea</strong><span>Repositories, Actions, and releases — 8080</span></a>
-    <a class="service" href="http://192.168.2.100:30090"><strong>Grafana</strong><span>Historical monitoring dashboards — 30090</span></a>
-    <a class="service" href="http://192.168.2.100:9090"><strong>Prometheus</strong><span>Metrics, queries, and targets — 9090</span></a>
-    <a class="service" href="http://192.168.2.100:8081"><strong>Longhorn</strong><span>Volumes, replicas, and storage — 8081</span></a>
-    <a class="service" href="http://192.168.2.100:30080"><strong>Ruby Forge</strong><span>Build metrics and reports — 30080</span></a>
-    <a class="service" href="https://192.168.2.22:8006"><strong>Proxmox</strong><span>Virtual machine management — 8006</span></a>
+    <a class="service" href="http://{{CONTROL_PLANE_ADDRESS}}:{{GITEA_PORT}}"><strong>Gitea</strong><span>Repositories, Actions, and releases — {{GITEA_PORT}}</span></a>
+    <a class="service" href="http://{{CONTROL_PLANE_ADDRESS}}:{{GRAFANA_PORT}}"><strong>Grafana</strong><span>Historical monitoring dashboards — {{GRAFANA_PORT}}</span></a>
+    <a class="service" href="http://{{CONTROL_PLANE_ADDRESS}}:{{PROMETHEUS_PORT}}"><strong>Prometheus</strong><span>Metrics, queries, and targets — {{PROMETHEUS_PORT}}</span></a>
+    <a class="service" href="http://{{CONTROL_PLANE_ADDRESS}}:{{LONGHORN_PORT}}"><strong>Longhorn</strong><span>Volumes, replicas, and storage — {{LONGHORN_PORT}}</span></a>
+    <a class="service" href="http://{{CONTROL_PLANE_ADDRESS}}:{{DASHBOARD_PORT}}"><strong>Ruby Forge</strong><span>Build metrics and reports — {{DASHBOARD_PORT}}</span></a>
+    <a class="service" href="https://{{PROXMOX_SSH_ADDRESS}}:8006"><strong>Proxmox</strong><span>Virtual machine management — 8006</span></a>
   </nav>
-  <h2>Documentation</h2>
-  <div class="docs">
-    <a href="kubernetes-commands.html">Kubernetes command reference</a>
-    <p>Kubectl, Helm, K3s, Longhorn, Gitea, and Ruby builder commands.</p>
-  </div>
+  <h2>Browser terminal</h2>
+  <p>Sign in as <code>admin</code> using your configured terminal password. The terminal is writable and intended only for the trusted lab network.</p>
+  <iframe src="http://{{DOCS_HOST}}:{{TERMINAL_PORT}}" title="xterm.js terminal" style="width:100%;height:460px;border:0;background:#111"></iframe>
+  <h2>Kubernetes command reference</h2>
+  <iframe src="kubernetes-commands.html" title="Kubernetes command reference" style="width:100%;height:700px;border:0;background:white"></iframe>
 </main>
 </body>
 </html>

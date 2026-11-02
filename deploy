@@ -69,6 +69,21 @@ for variable in PROXMOX_VE_API_TOKEN GITEA_ADMIN_PASSWORD; do
   export "$variable"
 done
 
+for variable in PROXMOX_SSH_ADDRESS CONTROL_PLANE_ADDRESS; do
+  if [[ $variable == PROXMOX_SSH_ADDRESS ]]; then
+    default_value=192.168.2.22
+  else
+    default_value=192.168.2.100
+  fi
+  current=${!variable:-$default_value}
+  if [[ $reconfigure == true || -z ${!variable:-} ]]; then
+    read -rp "$variable [$current]: " value
+    value=${value:-$current}
+    printf -v "$variable" '%s' "$value"
+    export "$variable"
+  fi
+done
+
 umask 077
 {
   printf 'export PROXMOX_VE_API_TOKEN=%q\n' "$PROXMOX_VE_API_TOKEN"
