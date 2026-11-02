@@ -63,7 +63,7 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
   GITEA_REPOSITORY=${GITEA_REPOSITORY:-admin/ruby}
   export GITEA_URL GITEA_REPOSITORY
 
-  if [[ (-z ${GITEA_RUNNER_TOKEN:-} || -z ${GITEA_PUBLISH_TOKEN:-}) && -n ${GITEA_ADMIN_PASSWORD:-} ]]; then
+  if [[ -n ${GITEA_ADMIN_PASSWORD:-} ]]; then
     gitea_api_url=${GITEA_API_URL:-http://${CONTROL_PLANE_ADDRESS:-192.168.2.100}:8080}
     gitea_owner=${GITEA_REPOSITORY%%/*}
     gitea_name=${GITEA_REPOSITORY#*/}
@@ -89,13 +89,11 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       GITEA_PUBLISH_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha1"])' <<<"$response")
       export GITEA_PUBLISH_TOKEN
     fi
-    if [[ -z ${GITEA_RUNNER_TOKEN:-} ]]; then
-      echo 'Fetching the Gitea Actions runner registration token'
-      response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
-        "${gitea_api_url}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners/registration-token")
-      GITEA_RUNNER_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' <<<"$response")
-      export GITEA_RUNNER_TOKEN
-    fi
+    echo 'Fetching a fresh Gitea Actions runner registration token'
+    response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
+      "${gitea_api_url}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners/registration-token")
+    GITEA_RUNNER_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' <<<"$response")
+    export GITEA_RUNNER_TOKEN
   fi
 
   for variable in GITEA_URL GITEA_REPOSITORY GITEA_RUNNER_TOKEN GITEA_PUBLISH_TOKEN; do

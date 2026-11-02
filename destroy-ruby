@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
+namespace=gentoo-ruby
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  cat <<'EOF'
+Usage: ./destroy-ruby [--force]
+
+Remove Ruby builders, their Gitea runners' Pods, the dashboard, and all
+Longhorn PVCs in the gentoo-ruby namespace. Also remove saved Ruby settings
+and shell exports. The Gitea repository, releases, and published assets remain.
+
+Options:
+  --force       Skip the confirmation prompt.
+  -h, --help  Show this manual.
+EOF
+  exit 0
+fi
+
+if [[ ${1:-} != --force ]]; then
+  read -rp 'Destroy all Ruby builders, dashboard data, and saved variables? [y/N] ' answer
+  if [[ ! $answer =~ ^[Yy]$ ]]; then
+    echo 'Cancelled.'
+    exit 0
+  fi
+fi
+
+printf '\n==> Removing the %s namespace and its persistent volumes\n' "$namespace"
+ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+  "debian@${control_plane_address}" \
+  "sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl delete namespace '$namespace' --wait=true"
+
+printf '\n==> Removing Ruby deployment variables\n'
+rm -f "${script_dir}/.ruby-build.env"
+for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [[ -f $rc_file ]] || continue
+  sed -i.bak '/^[[:space:]]*export GITEA_URL=/d; /^[[:space:]]*export GITEA_REPOSITORY=/d; /^[[:space:]]*export GITEA_RUNNER_TOKEN=/d; /^[[:space:]]*export GITEA_PUBLISH_TOKEN=/d' "$rc_file"
+  rm -f "${rc_file}.bak"
+done
+
+printf '\nRuby build resources destroyed. Gitea repository and releases were preserved.\n'

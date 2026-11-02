@@ -92,7 +92,7 @@ The dashboard stores its reports on a separate Longhorn volume. Its upload endpo
 ## Remove the builders
 
 ```bash
-kubectl delete namespace gentoo-ruby
+./destroy-ruby
 ```
 
-This removes the Kubernetes resources. PersistentVolumeClaims created by StatefulSets may need to be removed separately if their data is no longer required.
+Use `./destroy-ruby --force` to skip confirmation. This removes the builder and dashboard Pods, all PVCs in `gentoo-ruby`, saved variables, and shell exports. The Gitea repository, releases, and published assets are preserved.
