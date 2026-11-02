@@ -14,7 +14,6 @@ longhorn_port=${LONGHORN_PORT:-8081}
 grafana_port=${GRAFANA_PORT:-30090}
 dashboard_port=${DASHBOARD_PORT:-30080}
 docs_port=${DOCS_PORT:-8090}
-terminal_port=${TERMINAL_PORT:-7681}
 if [[ -z ${DOCS_HOST:-} ]]; then
   if command -v ipconfig >/dev/null 2>&1; then
     DOCS_HOST=$(ipconfig getifaddr en0 2>/dev/null || true)
@@ -119,7 +118,6 @@ start_docs() {
     content=${content//'{{LONGHORN_PORT}}'/$longhorn_port}
     content=${content//'{{GRAFANA_PORT}}'/$grafana_port}
     content=${content//'{{DASHBOARD_PORT}}'/$dashboard_port}
-    content=${content//'{{TERMINAL_PORT}}'/$terminal_port}
     printf '%s\n' "$content" > "$state_dir/www/$page"
   done
   nohup python3 -m http.server "$docs_port" --bind 0.0.0.0 \
@@ -142,50 +140,6 @@ stop_docs() {
   echo 'Documentation index stopped.'
 }
 
-terminal_running() {
-  [[ -s $state_dir/terminal.pid ]] && kill -0 "$(<"$state_dir/terminal.pid")" 2>/dev/null
-}
-
-start_terminal() {
-  if terminal_running; then
-    echo 'Browser terminal is already running.'
-    return
-  fi
-  if ! command -v ttyd >/dev/null 2>&1; then
-    echo 'ttyd is required for the browser terminal: sudo apt-get install ttyd' >&2
-    return 1
-  fi
-  if [[ -f ${script_dir}/.proxmox-env ]]; then
-    # shellcheck source=/dev/null
-    source "${script_dir}/.proxmox-env"
-  fi
-  terminal_password=${TERMINAL_PASSWORD:-${GITEA_ADMIN_PASSWORD:-}}
-  if [[ -z $terminal_password ]]; then
-    echo 'Set TERMINAL_PASSWORD or GITEA_ADMIN_PASSWORD for the browser terminal' >&2
-    return 1
-  fi
-  mkdir -p "$state_dir"
-  chmod 700 "$state_dir"
-  nohup ttyd -W -p "$terminal_port" -i 0.0.0.0 -c "admin:${terminal_password}" \
-    /bin/bash --login >>"$state_dir/terminal.log" 2>&1 </dev/null &
-  printf '%s\n' "$!" > "$state_dir/terminal.pid"
-  sleep 1
-  if ! terminal_running; then
-    rm -f "$state_dir/terminal.pid"
-    printf 'Browser terminal failed to start. See %s/terminal.log\n' "$state_dir" >&2
-    return 1
-  fi
-  printf 'Started browser terminal (PID %s).\n' "$(<"$state_dir/terminal.pid")"
-}
-
-stop_terminal() {
-  if terminal_running; then
-    kill "$(<"$state_dir/terminal.pid")"
-  fi
-  rm -f "$state_dir/terminal.pid"
-  echo 'Browser terminal stopped.'
-}
-
 start() {
   start_forward gitea gitea svc/gitea "${gitea_port}:80"
   start_forward prometheus monitoring svc/monitoring-kube-prometheus-prometheus "${prometheus_port}:9090"
@@ -193,7 +147,6 @@ start() {
   start_forward grafana monitoring svc/monitoring-grafana "${grafana_port}:80"
   start_forward ruby-dashboard gentoo-ruby svc/ruby-build-dashboard "${dashboard_port}:8080"
   start_docs
-  start_terminal
   status
 }
 
@@ -204,7 +157,6 @@ stop() {
   stop_forward grafana
   stop_forward ruby-dashboard
   stop_docs
-  stop_terminal
 }
 
 status() {
@@ -213,12 +165,6 @@ status() {
     printf 'main access: running — http://%s:%s\n' "$docs_host" "$docs_port"
   else
     echo 'main access: stopped'
-    result=1
-  fi
-  if terminal_running; then
-    printf 'terminal: running — http://%s:%s\n' "$docs_host" "$terminal_port"
-  else
-    echo 'terminal: stopped'
     result=1
   fi
   status_forward gitea "$gitea_port" || result=1
@@ -253,7 +199,7 @@ for required_command in ssh python3; do
     exit 1
   fi
 done
-for port in "$gitea_port" "$prometheus_port" "$longhorn_port" "$grafana_port" "$dashboard_port" "$docs_port" "$terminal_port"; do
+for port in "$gitea_port" "$prometheus_port" "$longhorn_port" "$grafana_port" "$dashboard_port" "$docs_port"; do
   if [[ ! $port =~ ^[0-9]+$ || $port -lt 1 || $port -gt 65535 ]]; then
     echo 'Service ports must be between 1 and 65535' >&2
     exit 2

@@ -38,11 +38,11 @@ Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` 
 ./run --help      # Manual and environment overrides
 ```
 
-Open `http://192.168.2.41:8090` for Main Access, which links to every service and embeds an authenticated xterm.js terminal above the Kubernetes command reference. Install its backend once with `sudo apt-get install ttyd`. Sign in as `admin` using `GITEA_ADMIN_PASSWORD`, or set `TERMINAL_PASSWORD` to override it. The writable terminal runs with the privileges of the user who started `run`; keep it on the trusted lab network and never expose it publicly.
+Open `http://192.168.2.41:8090` for Main Access, which links to every service and embeds the Kubernetes command reference.
 
 `./deploy` asks for `PROXMOX_SSH_ADDRESS` and `CONTROL_PLANE_ADDRESS` when they are not configured and includes them during `--reconfigure`. Main Access and its command examples are generated from these addresses, the discovered administration-VM address (`DOCS_HOST`), and the configured service ports. Set `DOCS_HOST` when automatic discovery should be overridden. No web-page edits are needed when the lab moves to another network.
 
-Port-forwards run as `k3s-access-*` systemd services on `k3s-control`, so they survive SSH logout and restart automatically without leaving orphaned SSH processes. The documentation and terminal servers keep their PID and log files in `~/.local/state/proxmox-k3s-gitea/`.
+Port-forwards run as `k3s-access-*` systemd services on `k3s-control`, so they survive SSH logout and restart automatically without leaving orphaned SSH processes. The documentation server keeps its PID and log files in `~/.local/state/proxmox-k3s-gitea/`.
 
 ### Prometheus and Grafana
 
