@@ -14,8 +14,14 @@ if ! command -v kubectl >/dev/null 2>&1; then
 fi
 
 deadline=$((SECONDS + timeout_seconds))
+last_progress=0
 while true; do
   node_count=$(kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  if (( SECONDS - last_progress >= 15 )); then
+    printf 'Nodes registered: %s/%s; waiting up to %s seconds\n' "$node_count" "$expected_nodes" "$timeout_seconds"
+    kubectl get nodes 2>/dev/null || true
+    last_progress=$SECONDS
+  fi
   if [[ ${node_count} -eq ${expected_nodes} ]]; then
     break
   fi
@@ -27,5 +33,7 @@ while true; do
   sleep 5
 done
 
+printf 'All %s nodes registered; waiting for Ready status\n' "$expected_nodes"
 kubectl wait --for=condition=Ready nodes --all --timeout="${timeout_seconds}s"
+printf 'All Kubernetes nodes are Ready\n'
 kubectl get nodes -o wide

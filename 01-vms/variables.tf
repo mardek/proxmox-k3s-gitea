@@ -88,7 +88,7 @@ variable "vms" {
   default = {
     control = {
       vm_id = 100, name = "k3s-control", role = "server", address = "192.168.2.100"
-      cores = 2, memory = 4096, disk_size = 40
+      cores = 2, memory = 2048, disk_size = 40
     }
     worker1 = {
       vm_id = 101, name = "k3s-worker-1", role = "agent", address = "192.168.2.101"

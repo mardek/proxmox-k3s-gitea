@@ -87,6 +87,8 @@ All three Gentoo builder Pods and runners remain online. Each deployment randoml
 ./diagnose                 # Full checks plus a ZIP archive in /tmp
 ```
 
+Before starting service access, deployment runs `02-kubernetes/validate-services` on the control plane. It validates Helm releases, Pod readiness, Longhorn StorageClasses, and core Services, with green success and red error messages. Deployment stops if validation fails.
+
 The monitor displays recent K3s logs from the control plane and all workers, plus the latest Ruby builder logs. Diagnostics are saved as `/tmp/k3s-diagnostics-<timestamp>.zip`; the `zip` package is required on the administration VM.
 
 ## Repository Layout

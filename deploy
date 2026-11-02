@@ -230,6 +230,10 @@ log "Installing or upgrading Gitea with Helm"
   printf "'%s/03-gitea/install'\n" "$remote_dir"
 } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
 
+log "Validating all core services"
+ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+  "sudo '${remote_dir}/02-kubernetes/validate-services'"
+
 log "Starting service access"
 SKIP_RUBY_DASHBOARD=true "${script_dir}/run" start
 

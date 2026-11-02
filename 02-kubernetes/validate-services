@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export KUBECONFIG=${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}
+if [[ -t 1 ]]; then
+  green=$'\033[32m'
+  red=$'\033[31m'
+  reset=$'\033[0m'
+else
+  green='' red='' reset=''
+fi
+trap 'printf "\n%b[ERROR]%b Core service validation failed at line %s\n" "$red" "$reset" "$LINENO" >&2' ERR
+
+validate_release() {
+  local namespace=$1 release=$2
+  printf 'Checking Helm release %s/%s\n' "$namespace" "$release"
+  if ! helm status "$release" -n "$namespace" >/dev/null; then
+    printf '%b[ERROR]%b Helm release %s/%s is not deployed\n' "$red" "$reset" "$namespace" "$release" >&2
+    return 1
+  fi
+  printf '%b[OK]%b Helm release %s/%s is deployed\n' "$green" "$reset" "$namespace" "$release"
+}
+
+wait_for_pods() {
+  local namespace=$1 deadline not_ready
+  printf 'Waiting for Pods in namespace %s\n' "$namespace"
+  deadline=$((SECONDS + 900))
+  while true; do
+    not_ready=$(kubectl -n "$namespace" get pods --no-headers 2>/dev/null | \
+      awk '$3 != "Completed" && $3 != "Succeeded" {split($2, ready, "/"); if (ready[1] != ready[2]) print $1}')
+    if [[ -z $not_ready ]]; then
+      printf '%b[OK]%b All Pods in %s are ready\n' "$green" "$reset" "$namespace"
+      return
+    fi
+    if (( SECONDS >= deadline )); then
+      printf '%b[ERROR]%b Pods not ready in %s:\n%s\n' "$red" "$reset" "$namespace" "$not_ready" >&2
+      kubectl -n "$namespace" get pods -o wide >&2
+      exit 1
+    fi
+    sleep 10
+  done
+}
+
+for command_name in kubectl helm; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    printf '%b[ERROR]%b %s is required for service validation\n' "$red" "$reset" "$command_name" >&2
+    exit 1
+  fi
+done
+
+validate_release longhorn-system longhorn
+validate_release monitoring monitoring
+validate_release gitea gitea
+wait_for_pods longhorn-system
+wait_for_pods monitoring
+wait_for_pods gitea
+
+kubectl get storageclass longhorn longhorn-rwx >/dev/null
+printf '%b[OK]%b Longhorn StorageClasses exist\n' "$green" "$reset"
+
+for service in \
+  'gitea gitea' \
+  'monitoring monitoring-grafana' \
+  'monitoring monitoring-kube-prometheus-prometheus' \
+  'longhorn-system longhorn-frontend'; do
+  read -r namespace name <<< "$service"
+  kubectl -n "$namespace" get service "$name" >/dev/null
+  printf '%b[OK]%b Service %s/%s exists\n' "$green" "$reset" "$namespace" "$name"
+done
+
+printf '\n%b[SUCCESS]%b Longhorn, Prometheus, Grafana, and Gitea are installed and ready\n' "$green" "$reset"
