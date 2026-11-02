@@ -25,6 +25,8 @@ Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` 
 
 ### Manage service access
 
+A successful `./deploy` automatically runs `./run start`; access startup is never attempted after a failed deployment step. The base deployment omits the Ruby dashboard until `./deploy-ruby` creates it.
+
 ```bash
 ./run start       # Start all service forwards and the documentation index
 ./run status      # Check all processes and display their URLs

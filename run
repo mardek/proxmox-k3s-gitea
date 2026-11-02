@@ -145,7 +145,9 @@ start() {
   start_forward prometheus monitoring svc/monitoring-kube-prometheus-prometheus "${prometheus_port}:9090"
   start_forward longhorn longhorn-system svc/longhorn-frontend "${longhorn_port}:80"
   start_forward grafana monitoring svc/monitoring-grafana "${grafana_port}:80"
-  start_forward ruby-dashboard gentoo-ruby svc/ruby-build-dashboard "${dashboard_port}:8080"
+  if [[ ${SKIP_RUBY_DASHBOARD:-false} != true ]]; then
+    start_forward ruby-dashboard gentoo-ruby svc/ruby-build-dashboard "${dashboard_port}:8080"
+  fi
   start_docs
   status
 }
@@ -171,7 +173,9 @@ status() {
   status_forward prometheus "$prometheus_port" || result=1
   status_forward longhorn "$longhorn_port" || result=1
   status_forward grafana "$grafana_port" || result=1
-  status_forward ruby-dashboard "$dashboard_port" || result=1
+  if [[ ${SKIP_RUBY_DASHBOARD:-false} != true ]]; then
+    status_forward ruby-dashboard "$dashboard_port" || result=1
+  fi
   return "$result"
 }
 

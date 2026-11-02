@@ -231,6 +231,6 @@ log "Installing or upgrading Gitea with Helm"
 } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
 
 log "Starting service access"
-"${script_dir}/run" start || true
+SKIP_RUBY_DASHBOARD=true "${script_dir}/run" start
 
 log "Deployment completed successfully"
