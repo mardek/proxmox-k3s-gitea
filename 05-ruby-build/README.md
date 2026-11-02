@@ -8,8 +8,7 @@ Deploys one Gentoo StatefulSet on each K3s worker. All three Pods and Gitea Acti
 - Gitea Actions is enabled.
 - Gitea has a stable URL reachable from every worker pod.
 - A Gitea Actions registration token is available.
-- A repository exists for build releases. Its owner and name are supplied as `owner/repository`.
-- A separate access token can create releases and upload assets in that repository.
+- If `admin/ruby` does not exist, the deployment creates it automatically and initializes its first commit. Existing repositories are reused.
 - `ssh` and `scp` are installed on the Debian administration VM. The script copies the project to `k3s-control` and performs all `kubectl` operations there.
 
 ## Deploy
@@ -19,6 +18,8 @@ Deploys one Gentoo StatefulSet on each K3s worker. All three Pods and Gitea Acti
 ```
 
 The script prompts for missing settings and saves them in `.ruby-build.env` with owner-only permissions. Missing exports are also appended to existing `.bashrc` and `.zshrc` files. Later runs reuse those values. Tokens are hidden while typing. Run `./deploy-ruby --reconfigure` to change saved settings, or `./deploy-ruby --help` for the complete manual. Deployment restarts all three builders and starts a new initial build.
+
+With `GITEA_ADMIN_PASSWORD` available from `.proxmox-env`, the script automatically creates a missing `admin/ruby` repository, generates a repository-write publishing token, and fetches the Actions registration token. Start Gitea access first with `./run start`. Set `GITEA_API_URL` if the administrative API uses a different address. Manual token entry remains available when admin credentials are unavailable.
 
 Use these values for the local lab:
 

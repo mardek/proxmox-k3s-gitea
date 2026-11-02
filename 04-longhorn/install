@@ -3,6 +3,10 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
+if [[ -z ${KUBECONFIG:-} && -f /etc/rancher/k3s/k3s.yaml ]]; then
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+fi
+
 log() {
   printf '\n==> %s\n' "$*"
 }
@@ -13,13 +17,13 @@ sudo apt-get install -y open-iscsi nfs-common cryptsetup dmsetup
 sudo systemctl enable --now iscsid
 
 log "Installing Longhorn 1.13.0"
-sudo helm repo add longhorn https://charts.longhorn.io --force-update
-sudo helm repo update longhorn
+sudo env KUBECONFIG="${KUBECONFIG}" helm repo add longhorn https://charts.longhorn.io --force-update
+sudo env KUBECONFIG="${KUBECONFIG}" helm repo update longhorn
 
 watch_longhorn_pods() {
   while true; do
     printf '\n--- Longhorn pod status (%s) ---\n' "$(date -u +%H:%M:%S)"
-    sudo kubectl -n longhorn-system get pods -o wide 2>/dev/null || true
+    sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system get pods -o wide 2>/dev/null || true
     sleep 15
   done
 }
@@ -27,25 +31,41 @@ watch_longhorn_pods() {
 watch_longhorn_pods &
 watcher_pid=$!
 trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
-sudo helm upgrade --install longhorn longhorn/longhorn \
-  --version 1.13.0 --namespace longhorn-system --create-namespace --wait --timeout 15m
+sudo env KUBECONFIG="${KUBECONFIG}" helm upgrade --install longhorn longhorn/longhorn \
+  --version 1.13.0 --namespace longhorn-system --create-namespace --wait --timeout 15m \
+  2> >(grep -v 'Warning: unrecognized format "int64"' >&2)
 kill "$watcher_pid" 2>/dev/null || true
 wait "$watcher_pid" 2>/dev/null || true
 trap - EXIT
 
 log "Waiting for Longhorn controllers and node drivers"
-sudo kubectl -n longhorn-system wait --for=condition=Available deployment --all --timeout=15m
+sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system wait --for=condition=Available deployment --all --timeout=15m
 while read -r daemonset; do
-  sudo kubectl -n longhorn-system rollout status "$daemonset" --timeout=15m
-done < <(sudo kubectl -n longhorn-system get daemonset -o name)
+  sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system rollout status "$daemonset" --timeout=15m
+done < <(sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system get daemonset -o name)
+
+log "Waiting for every Longhorn Pod to become ready"
+deadline=$((SECONDS + 900))
+while true; do
+  not_ready=$(sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system get pods --no-headers 2>/dev/null | \
+    awk '$3 != "Completed" && $3 != "Succeeded" && $2 != "1/1" && $2 != "2/2" && $2 != "3/3" {print $1}')
+  if [[ -z $not_ready ]]; then
+    break
+  fi
+  if (( SECONDS >= deadline )); then
+    printf 'Longhorn Pods not ready after 15 minutes:\n%s\n' "$not_ready" >&2
+    exit 1
+  fi
+  sleep 10
+done
 
 log "Creating the RWX StorageClass"
-sudo kubectl apply -f - < "${script_dir}/storageclass.yaml"
+sudo env KUBECONFIG="${KUBECONFIG}" kubectl apply -f - < "${script_dir}/storageclass.yaml"
 
 log "Setting longhorn as the default StorageClass"
-sudo kubectl patch storageclass longhorn \
+sudo env KUBECONFIG="${KUBECONFIG}" kubectl patch storageclass longhorn \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
-sudo kubectl patch storageclass local-path \
+sudo env KUBECONFIG="${KUBECONFIG}" kubectl patch storageclass local-path \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 
 log "Longhorn installation complete"

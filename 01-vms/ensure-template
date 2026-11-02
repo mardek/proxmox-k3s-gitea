@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+proxmox_ssh_address=${PROXMOX_SSH_ADDRESS:?Set PROXMOX_SSH_ADDRESS}
+template_vm_id=${TEMPLATE_VM_ID:-9000}
+datastore_id=${DATASTORE_ID:-local-lvm}
+network_bridge=${NETWORK_BRIDGE:-vmbr0}
+image_url=${DEBIAN_CLOUD_IMAGE_URL:-https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2}
+ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+
+if ssh "${ssh_options[@]}" "root@${proxmox_ssh_address}" "qm status '$template_vm_id'" >/dev/null 2>&1; then
+  echo "Template $template_vm_id already exists"
+  exit 0
+fi
+
+printf 'Creating Debian 12 Cloud-Init template %s\n' "$template_vm_id"
+ssh "${ssh_options[@]}" "root@${proxmox_ssh_address}" \
+  "TEMPLATE_VM_ID='$template_vm_id' DATASTORE_ID='$datastore_id' NETWORK_BRIDGE='$network_bridge' IMAGE_URL='$image_url' bash -s" <<'REMOTE'
+set -euo pipefail
+image=/tmp/debian-12-genericcloud-amd64.qcow2
+trap 'rm -f "$image"' EXIT
+curl -fL --retry 3 "$IMAGE_URL" -o "$image"
+qm create "$TEMPLATE_VM_ID" --name debian-12-cloud --memory 2048 --cores 2 \
+  --net0 "virtio,bridge=${NETWORK_BRIDGE}" --ostype l26
+qm set "$TEMPLATE_VM_ID" --scsi0 "${DATASTORE_ID}:0,import-from=${image}"
+qm set "$TEMPLATE_VM_ID" --ide2 "${DATASTORE_ID}:cloudinit"
+qm set "$TEMPLATE_VM_ID" --boot c --bootdisk scsi0 --ipconfig0 ip=dhcp
+qm set "$TEMPLATE_VM_ID" --serial0 socket --vga serial0 --agent enabled=1
+qm template "$TEMPLATE_VM_ID"
+REMOTE

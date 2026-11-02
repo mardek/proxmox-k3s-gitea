@@ -52,6 +52,11 @@ if ! command -v ssh >/dev/null 2>&1; then
   exit 1
 fi
 
+for address in "$control_plane_address" $worker_addresses; do
+  ssh-keygen -R "$address" >/dev/null 2>&1 || true
+  ssh-keygen -R "[${address}]:22" >/dev/null 2>&1 || true
+done
+
 section() {
   printf '\n==> %s\n' "$*"
 }
@@ -63,7 +68,7 @@ control() {
 watch_compiler() {
   while true; do
     for worker in k3s-worker-1 k3s-worker-2 k3s-worker-3; do
-      if control "kubectl -n gentoo-ruby exec ruby-builder-${worker}-0 -- pgrep -f /opt/ruby-build/build-ruby" >/dev/null 2>&1; then
+      if control "kubectl -n gentoo-ruby exec ruby-builder-${worker}-0 -- bash -c 'for process in /proc/[0-9]*/cmdline; do tr \"\\0\" \" \" < \"\$process\" | grep -Eq \"[e]merge|build-[r]uby\" && exit 0; done; exit 1'" >/dev/null 2>&1; then
         printf 'Following compilation on %s. Press Ctrl+C to stop.\n' "$worker"
         exec ssh -t "${ssh_options[@]}" "debian@${control_plane_address}" \
           "sudo kubectl -n gentoo-ruby logs ruby-builder-${worker}-0 -f"

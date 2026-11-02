@@ -47,6 +47,7 @@ resource "proxmox_virtual_environment_vm" "nodes" {
 
   agent {
     enabled = true
+    timeout = "2m"
   }
 
   cpu {
@@ -84,5 +85,9 @@ resource "proxmox_virtual_environment_vm" "nodes" {
 
   operating_system {
     type = "l26"
+  }
+
+  provisioner "local-exec" {
+    command = "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 ${var.proxmox_ssh_username}@${var.proxmox_ssh_address} 'qm set ${each.value.vm_id} --cicustom user=${var.snippet_datastore_id}:snippets/${each.value.name}-cloud-init.yaml && qm reset ${each.value.vm_id}'"
   }
 }

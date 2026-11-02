@@ -4,6 +4,7 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 namespace=gentoo-ruby
 workers=(k3s-worker-1 k3s-worker-2 k3s-worker-3)
+control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
 config_file=${RUBY_BUILD_CONFIG:-${script_dir}/.ruby-build.env}
 reconfigure=false
 
@@ -54,6 +55,49 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true && -f $config_file ]]; then
 fi
 
 if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
+  if [[ -f ${script_dir}/.proxmox-env ]]; then
+    # shellcheck source=/dev/null
+    source "${script_dir}/.proxmox-env"
+  fi
+  GITEA_URL=${GITEA_URL:-http://gitea.gitea.svc.cluster.local}
+  GITEA_REPOSITORY=${GITEA_REPOSITORY:-admin/ruby}
+  export GITEA_URL GITEA_REPOSITORY
+
+  if [[ (-z ${GITEA_RUNNER_TOKEN:-} || -z ${GITEA_PUBLISH_TOKEN:-}) && -n ${GITEA_ADMIN_PASSWORD:-} ]]; then
+    gitea_api_url=${GITEA_API_URL:-http://${CONTROL_PLANE_ADDRESS:-192.168.2.100}:8080}
+    gitea_owner=${GITEA_REPOSITORY%%/*}
+    gitea_name=${GITEA_REPOSITORY#*/}
+    if [[ $gitea_owner != admin ]]; then
+      echo 'Automatic repository creation currently supports the admin owner only' >&2
+      exit 1
+    fi
+    printf '\n==> Ensuring Gitea repository %s exists\n' "$GITEA_REPOSITORY"
+    repo_status=$(curl -sS -o /dev/null -w '%{http_code}' -u "admin:${GITEA_ADMIN_PASSWORD}" \
+      -H 'Content-Type: application/json' \
+      -d "{\"name\":\"${gitea_name}\",\"private\":false,\"auto_init\":true}" \
+      "${gitea_api_url}/api/v1/user/repos")
+    if [[ $repo_status != 201 && $repo_status != 409 ]]; then
+      echo "Could not create or find $GITEA_REPOSITORY (HTTP $repo_status); check Gitea access with ./run start" >&2
+      exit 1
+    fi
+    if [[ -z ${GITEA_PUBLISH_TOKEN:-} ]]; then
+      echo 'Creating the Gitea release publishing token'
+      response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
+        -H 'Content-Type: application/json' \
+        -d '{"name":"ruby-release-publisher","scopes":["write:repository"]}' \
+        "${gitea_api_url}/api/v1/users/admin/tokens")
+      GITEA_PUBLISH_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha1"])' <<<"$response")
+      export GITEA_PUBLISH_TOKEN
+    fi
+    if [[ -z ${GITEA_RUNNER_TOKEN:-} ]]; then
+      echo 'Fetching the Gitea Actions runner registration token'
+      response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
+        "${gitea_api_url}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners/registration-token")
+      GITEA_RUNNER_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' <<<"$response")
+      export GITEA_RUNNER_TOKEN
+    fi
+  fi
+
   for variable in GITEA_URL GITEA_REPOSITORY GITEA_RUNNER_TOKEN GITEA_PUBLISH_TOKEN; do
     current=${!variable:-}
     if [[ $reconfigure != true && -n $current ]]; then

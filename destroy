@@ -42,4 +42,12 @@ log "The next step will permanently delete all managed VMs, snippets, and local 
 log "Review the destruction plan and type yes only if you intend to erase the environment"
 terraform -chdir="${script_dir}/01-vms" destroy -input=false
 
+log "Removing Ruby deployment variables"
+rm -f "${script_dir}/.ruby-build.env"
+for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [[ -f $rc_file ]] || continue
+  sed -i.bak '/^[[:space:]]*export GITEA_URL=/d; /^[[:space:]]*export GITEA_REPOSITORY=/d; /^[[:space:]]*export GITEA_RUNNER_TOKEN=/d; /^[[:space:]]*export GITEA_PUBLISH_TOKEN=/d' "$rc_file"
+  rm -f "${rc_file}.bak"
+done
+
 log "Terraform-managed environment destroyed"

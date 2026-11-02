@@ -138,11 +138,30 @@ log "Preparing the local Terraform provider mirror"
 export TF_CLI_CONFIG_FILE="${script_dir}/01-vms/.terraform-provider-mirror/terraform.rc"
 
 log "Loading the SSH key and testing Proxmox access"
+if [[ -n ${SSH_PRIVATE_KEY:-} ]]; then
+  ssh_private_key=$SSH_PRIVATE_KEY
+else
+  ssh_private_key=''
+  for candidate in "$HOME/.ssh/id_ed25519" "$HOME/.ssh/id_rsa"; do
+    if [[ -f $candidate && -f ${candidate}.pub ]]; then
+      ssh_private_key=$candidate
+      break
+    fi
+  done
+fi
+if [[ -z $ssh_private_key || ! -f $ssh_private_key || ! -f ${ssh_private_key}.pub ]]; then
+  echo 'No usable SSH key found; set SSH_PRIVATE_KEY to a private key with a .pub file' >&2
+  exit 1
+fi
 eval "$(ssh-agent -s)" >/dev/null
-ssh-add "$HOME/.ssh/id_ed25519"
+ssh-add "$ssh_private_key"
 ssh-add -L >/dev/null
+printf 'Using SSH key %s for Proxmox access\n' "$ssh_private_key"
 refresh_host_key "$proxmox_ssh_address"
 ssh "${ssh_options[@]}" "root@${proxmox_ssh_address}" 'echo SSH_OK'
+
+log "Checking the Debian 12 Cloud-Init template"
+PROXMOX_SSH_ADDRESS="$proxmox_ssh_address" "${script_dir}/01-vms/ensure-template"
 
 log "Creating or updating the four Proxmox VMs"
 terraform -chdir="${script_dir}/01-vms" init -input=false
@@ -210,5 +229,8 @@ log "Installing or upgrading Gitea with Helm"
   printf 'export GITEA_HOST=%q\n' "${GITEA_HOST:-}"
   printf "'%s/03-gitea/install'\n" "$remote_dir"
 } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
+
+log "Starting service access"
+"${script_dir}/run" start || true
 
 log "Deployment completed successfully"

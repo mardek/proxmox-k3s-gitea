@@ -13,17 +13,13 @@ In this exercise, `192.168.2.22` is the Proxmox server's primary management addr
 Run these commands on the Debian administration VM:
 
 ```bash
-# Load the SSH key used for Proxmox and the cluster
-ssh-add ~/.ssh/id_ed25519
-
-# Create the VMs and install K3s, Longhorn, and Gitea
+# Create the VMs, install the platform, and start service access
 ./deploy
-
-# Open persistent access to Gitea
-./run start
 ```
 
 Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts for the Proxmox API token and Gitea administrator password. Settings are saved in `.proxmox-env` with owner-only permissions and reused on later runs. Missing exports are also appended to existing `.bashrc` and `.zshrc` files.
+
+If VMID `9000` (`debian-12-cloud`) is absent, deployment creates it from the official Debian 12 generic cloud image; an existing template is left untouched.
 
 Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` for all options. Helm and K9s are reinstalled only when their required versions are missing or different. To report newer upstream releases without upgrading them, run `./deploy --check-updates`; normal deployments do not perform update checks.
 
@@ -69,7 +65,7 @@ The service index links to every web interface and to `kubernetes-commands.html`
 
 ### Deploy the Ruby build lab
 
-After creating the `admin/ruby` repository in Gitea:
+After starting Gitea access with `./run start`:
 
 ```bash
 ./deploy-ruby
