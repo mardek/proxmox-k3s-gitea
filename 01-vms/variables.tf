@@ -88,7 +88,7 @@ variable "vms" {
   default = {
     control = {
       vm_id = 100, name = "k3s-control", role = "server", address = "192.168.2.100"
-      cores = 2, memory = 2048, disk_size = 40
+      cores = 2, memory = 4096, disk_size = 40
     }
     worker1 = {
       vm_id = 101, name = "k3s-worker-1", role = "agent", address = "192.168.2.101"
@@ -107,5 +107,10 @@ variable "vms" {
   validation {
     condition     = length([for vm in values(var.vms) : vm if vm.role == "server"]) == 1 && alltrue([for vm in values(var.vms) : contains(["server", "agent"], vm.role)])
     error_message = "Define exactly one server and only agent roles for all other VMs."
+  }
+
+  validation {
+    condition     = alltrue([for vm in values(var.vms) : vm.role != "server" || vm.memory >= 4096])
+    error_message = "The K3s control plane requires at least 4096 MiB with Longhorn and monitoring."
   }
 }

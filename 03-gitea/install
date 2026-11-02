@@ -25,6 +25,15 @@ kubectl -n gitea create secret generic gitea-admin \
   --dry-run=client -o yaml | kubectl apply -f -
 unset GITEA_ADMIN_PASSWORD
 
+for domain in registry-1.docker.io auth.docker.io production.cloudflare.docker.com production.cloudfront.docker.com; do
+  if ! grep -q "[[:space:]]${domain}\([[:space:]]\|$\)" /etc/hosts; then
+    registry_ip=$(getent ahostsv4 "$domain" | awk 'NR == 1 {print $1}')
+    if [[ -n $registry_ip ]]; then
+      printf '%s %s\n' "$registry_ip" "$domain" >> /etc/hosts
+    fi
+  fi
+done
+
 helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
 helm repo update bitnami
 

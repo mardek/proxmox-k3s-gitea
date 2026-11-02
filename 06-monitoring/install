@@ -36,7 +36,7 @@ helm repo update prometheus-community
 watch_monitoring_pods() {
   while true; do
     printf '\n--- Monitoring pod status (%s) ---\n' "$(date -u +%H:%M:%S)"
-    kubectl -n monitoring get pods -o wide 2>/dev/null || true
+    kubectl -n monitoring get pods -o wide 2>&1 || true
     sleep 15
   done
 }
@@ -44,6 +44,7 @@ watch_monitoring_pods() {
 watch_monitoring_pods &
 watcher_pid=$!
 trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
+printf '\n==> Downloading the chart and creating monitoring resources\n'
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --version "${MONITORING_CHART_VERSION:-92.3.1}" \
   --namespace monitoring \

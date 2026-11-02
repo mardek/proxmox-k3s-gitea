@@ -170,14 +170,20 @@ terraform -chdir="${script_dir}/01-vms" apply -auto-approve -input=false
 log "Waiting for K3s on ${control_plane_address}"
 refresh_host_key "$control_plane_address"
 deadline=$((SECONDS + 600))
+last_progress=0
 until ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   'sudo test -s /etc/rancher/k3s/k3s.yaml' 2>/dev/null; do
+  if (( SECONDS - last_progress >= 15 )); then
+    printf 'K3s is not ready on %s; waiting for SSH and /etc/rancher/k3s/k3s.yaml\n' "$control_plane_address"
+    last_progress=$SECONDS
+  fi
   if (( SECONDS >= deadline )); then
-    echo "Timed out waiting for K3s on ${control_plane_address}" >&2
+    printf '[ERROR] Timed out after 600 seconds waiting for K3s on %s\n' "$control_plane_address" >&2
     exit 1
   fi
   sleep 10
 done
+printf '[OK] K3s is running and its kubeconfig is available on %s\n' "$control_plane_address"
 
 log "Copying deployment scripts to the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
