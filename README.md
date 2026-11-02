@@ -30,7 +30,7 @@ Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` 
 ### Manage service access
 
 ```bash
-./run start       # Start Gitea, Prometheus, Longhorn, Grafana, and Ruby dashboard
+./run start       # Start all service forwards and the documentation index
 ./run status      # Check all processes and display their URLs
 ./run stop        # Stop all port-forwards
 ./run restart     # Restart all port-forwards
@@ -38,7 +38,7 @@ Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` 
 ./run --help      # Manual and environment overrides
 ```
 
-Separate background PID and log files for all services are stored in `~/.local/state/proxmox-k3s-gitea/`. The processes survive SSH logout.
+Open `http://192.168.2.100:8090` for the service index, which links to Gitea, Prometheus, Longhorn, Grafana, the Ruby dashboard, Proxmox, and the Kubernetes command reference. Separate background PID and log files are stored in `~/.local/state/proxmox-k3s-gitea/`. All access processes survive SSH logout.
 
 ### Prometheus and Grafana
 
