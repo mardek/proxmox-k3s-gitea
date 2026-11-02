@@ -6,10 +6,11 @@ worker_addresses=${WORKER_ADDRESSES:-"192.168.2.101 192.168.2.102 192.168.2.103"
 ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 interval=5
 once=false
+compiler=false
 
 usage() {
   cat <<'EOF'
-Usage: ./monitor [--once] [--interval SECONDS]
+Usage: ./monitor [--once] [--interval SECONDS] [--compiler]
        ./monitor -h | --help
 
 Watch Kubernetes nodes, Pods, Services, PVs, PVCs, Ruby builders, and recent
@@ -19,6 +20,7 @@ Press Ctrl+C to stop.
 Options:
   --once              Fetch one snapshot and exit.
   --interval SECONDS  Set the refresh interval (default: 5).
+  --compiler          Find the active builder and follow its compilation log.
   -h, --help          Show this manual.
 
 Environment overrides:
@@ -30,6 +32,7 @@ EOF
 while (($#)); do
   case $1 in
     --once) once=true ;;
+    --compiler) compiler=true ;;
     --interval)
       shift
       if [[ ! ${1:-} =~ ^[1-9][0-9]*$ ]]; then
@@ -56,6 +59,24 @@ section() {
 control() {
   ssh "${ssh_options[@]}" "debian@${control_plane_address}" "sudo $*" 2>&1
 }
+
+watch_compiler() {
+  while true; do
+    for worker in k3s-worker-1 k3s-worker-2 k3s-worker-3; do
+      if control "kubectl -n gentoo-ruby exec ruby-builder-${worker}-0 -- pgrep -f /opt/ruby-build/build-ruby" >/dev/null 2>&1; then
+        printf 'Following compilation on %s. Press Ctrl+C to stop.\n' "$worker"
+        exec ssh -t "${ssh_options[@]}" "debian@${control_plane_address}" \
+          "sudo kubectl -n gentoo-ruby logs ruby-builder-${worker}-0 -f"
+      fi
+    done
+    printf 'No active compilation found; checking again in %s seconds.\n' "$interval"
+    sleep "$interval"
+  done
+}
+
+if [[ $compiler == true ]]; then
+  watch_compiler
+fi
 
 snapshot() {
   printf 'Cluster monitor — %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"

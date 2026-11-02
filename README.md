@@ -27,24 +27,24 @@ Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts f
 
 Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` for all options. Helm and K9s are reinstalled only when their required versions are missing or different. To report newer upstream releases without upgrading them, run `./deploy --check-updates`; normal deployments do not perform update checks.
 
-### Manage Gitea access
+### Manage service access
 
 ```bash
-./run start       # Start in the background; survives SSH logout
-./run status      # Check the process and display the URL
-./run stop        # Stop access
-./run restart     # Restart access
-./run foreground  # Optional terminal-bound mode
+./run start       # Start Gitea, Prometheus, Longhorn, Grafana, and Ruby dashboard
+./run status      # Check all processes and display their URLs
+./run stop        # Stop all port-forwards
+./run restart     # Restart all port-forwards
+./run foreground  # Optional terminal-bound Gitea-only mode
 ./run --help      # Manual and environment overrides
 ```
 
-The background PID and log are stored in `~/.local/state/proxmox-k3s-gitea/`.
+Separate background PID and log files for all services are stored in `~/.local/state/proxmox-k3s-gitea/`. The processes survive SSH logout.
 
 ### Prometheus and Grafana
 
 The main deployment installs `kube-prometheus-stack` in the `monitoring` namespace. Open Grafana at `http://192.168.2.100:30090` and log in as `admin`; its initial password matches `GITEA_ADMIN_PASSWORD` unless `GRAFANA_ADMIN_PASSWORD` is set.
 
-Prometheus retains 15 days of node, Pod, container, disk, network, and Longhorn metrics on a 20 Gi Longhorn volume. Node Exporter reports CPU, memory, filesystem, disk I/O, and network usage for every VM. kube-state-metrics reports Kubernetes resource health and container consumption. Grafana includes prebuilt dashboards for cluster and node history, including CPU, memory, disk, network, and Pod usage over selectable time ranges.
+Prometheus retains 15 days of node, Pod, container, disk, network, and Longhorn metrics on a 5 Gi Longhorn volume. Node Exporter reports CPU, memory, filesystem, disk I/O, and network usage for every VM. kube-state-metrics reports Kubernetes resource health and container consumption. Grafana includes prebuilt dashboards for cluster and node history, including CPU, memory, disk, network, and Pod usage over selectable time ranges.
 
 To reinstall only monitoring, copy `06-monitoring/` to the control plane and run `sudo ./06-monitoring/install` with `GRAFANA_ADMIN_PASSWORD` set.
 
@@ -52,20 +52,16 @@ To reinstall only monitoring, copy `06-monitoring/` to the control plane and run
 
 | Service | Address or port | Access method |
 |---------|-----------------|---------------|
+| Service index and command reference | `http://192.168.2.100:8090` | Local web server started by `./run start` |
 | Proxmox | `https://192.168.2.22:8006` | Direct web interface |
 | Gitea | `http://192.168.2.100:8080` | Start with `./run start` |
-| Ruby build dashboard | `http://192.168.2.100:30080` | NodePort, available after `./deploy-ruby` |
-| Grafana | `http://192.168.2.100:30090` | NodePort, installed by `./deploy` |
+| Ruby build dashboard | `http://192.168.2.100:30080` | Start with `./run start` after `./deploy-ruby` |
+| Grafana | `http://192.168.2.100:30090` | NodePort or managed port-forward |
 | Kubernetes API | `192.168.2.100:6443` | Administrative access with kubeconfig |
-| Prometheus | `192.168.2.100:9090` | Port-forward, command below |
-| Longhorn UI | `192.168.2.100:8081` | Port-forward, command below |
+| Prometheus | `http://192.168.2.100:9090` | Start with `./run start` |
+| Longhorn UI | `http://192.168.2.100:8081` | Start with `./run start` |
 
-Prometheus and the Longhorn UI remain internal ClusterIP services. To access them temporarily, run these commands on the control plane:
-
-```bash
-sudo kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 --address 0.0.0.0
-sudo kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80 --address 0.0.0.0
-```
+The service index links to every web interface and to `kubernetes-commands.html`. It is served from `docs/index.html` on the administration VM.
 
 ### Deploy the Ruby build lab
 
@@ -77,7 +73,7 @@ After creating the `admin/ruby` repository in Gitea:
 
 The script requests the internal Gitea URL, repository name, Actions runner registration token, and release publishing token. Use `http://gitea.gitea.svc.cluster.local` and `admin/ruby` for this lab. Settings are saved in `.ruby-build.env`; run `./deploy-ruby --reconfigure` after rotating credentials.
 
-Three Gentoo builders compile and test Ruby as an unprivileged user, publish releases to Gitea, and send metrics to `http://192.168.2.100:30080`. See [the Ruby builder guide](05-ruby-build/README.md) for token setup and monitoring.
+All three Gentoo builder Pods and runners remain online. Each deployment randomly selects one worker for the initial build, avoiding three simultaneous compilations; Gitea can schedule subsequent jobs across all runners. Builds compile and test Ruby as an unprivileged user, publish releases to Gitea, and send metrics to `http://192.168.2.100:30080`. See [the Ruby builder guide](05-ruby-build/README.md) for token setup and monitoring.
 
 ### Monitor and diagnose
 
@@ -85,6 +81,7 @@ Three Gentoo builders compile and test Ruby as an unprivileged user, publish rel
 ./monitor                  # Live nodes, Pods, Services, PVs, PVCs, and logs
 ./monitor --interval 10    # Refresh every ten seconds
 ./monitor --once           # Fetch one snapshot
+./monitor --compiler       # Follow the active Ruby compilation log
 ./diagnose                 # Full checks plus a ZIP archive in /tmp
 ```
 

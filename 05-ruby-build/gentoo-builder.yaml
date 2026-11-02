@@ -31,6 +31,8 @@ spec:
               value: ${ACT_RUNNER_SHA256}
             - name: RUBY_VERSION
               value: ${RUBY_VERSION}
+            - name: RUBY_BUILD_ON_START
+              value: ${RUBY_BUILD_ON_START}
             - name: DASHBOARD_URL
               value: http://ruby-build-dashboard:8080
             - name: GITEA_URL

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K3s Lab — Service Access</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #172033; background: #f5f7fa; }
+    main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    h2 { margin-top: 36px; font-size: 20px; }
+    .intro { color: #65728a; margin: 0 0 24px; }
+    .services { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .service { display: block; padding: 18px; color: #172033; background: white; border-top: 3px solid #2457c5; text-decoration: none; box-shadow: 0 4px 18px #1720330d; }
+    .service:hover { border-top-color: #c51f3a; }
+    .service strong { display: block; margin-bottom: 4px; }
+    .service span { color: #65728a; font-size: 14px; }
+    .docs { padding: 20px; background: white; }
+    a { color: #2457c5; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>K3s Lab</h1>
+  <p class="intro">Service access and operating guides</p>
+  <nav class="services" aria-label="Service access">
+    <a class="service" href="http://192.168.2.100:8080"><strong>Gitea</strong><span>Repositories, Actions, and releases — 8080</span></a>
+    <a class="service" href="http://192.168.2.100:30090"><strong>Grafana</strong><span>Historical monitoring dashboards — 30090</span></a>
+    <a class="service" href="http://192.168.2.100:9090"><strong>Prometheus</strong><span>Metrics, queries, and targets — 9090</span></a>
+    <a class="service" href="http://192.168.2.100:8081"><strong>Longhorn</strong><span>Volumes, replicas, and storage — 8081</span></a>
+    <a class="service" href="http://192.168.2.100:30080"><strong>Ruby Forge</strong><span>Build metrics and reports — 30080</span></a>
+    <a class="service" href="https://192.168.2.22:8006"><strong>Proxmox</strong><span>Virtual machine management — 8006</span></a>
+  </nav>
+  <h2>Documentation</h2>
+  <div class="docs">
+    <a href="kubernetes-commands.html">Kubernetes command reference</a>
+    <p>Kubectl, Helm, K3s, Longhorn, Gitea, and Ruby builder commands.</p>
+  </div>
+</main>
+</body>
+</html>

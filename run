@@ -3,33 +3,41 @@ set -euo pipefail
 
 control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
 gitea_port=${GITEA_PORT:-8080}
+prometheus_port=${PROMETHEUS_PORT:-9090}
+longhorn_port=${LONGHORN_PORT:-8081}
+grafana_port=${GRAFANA_PORT:-30090}
+dashboard_port=${DASHBOARD_PORT:-30080}
+docs_port=${DOCS_PORT:-8090}
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 state_dir=${RUN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/proxmox-k3s-gitea}
-pid_file=$state_dir/gitea-port-forward.pid
-log_file=$state_dir/gitea-port-forward.log
 
 usage() {
   cat <<'EOF'
 Usage: ./run [start|stop|restart|status|foreground]
        ./run -h | --help
 
-Manage persistent access to Gitea through a background SSH port-forward.
-The default command is start. The process survives terminal and SSH logout.
+Manage persistent access to Gitea, Prometheus, Longhorn, Grafana, and the Ruby
+dashboard through background SSH port-forwards that survive SSH logout.
 
 Commands:
-  start       Start the port-forward unless it is already running.
-  stop        Stop the background port-forward.
-  restart     Restart the background port-forward.
-  status      Show whether the port-forward is running.
-  foreground  Run in the terminal without detaching (stops with Ctrl+C).
+  start       Start all port-forwards unless already running.
+  stop        Stop all background port-forwards.
+  restart     Restart all background port-forwards.
+  status      Show all URLs and process states.
+  foreground  Run only Gitea in the terminal (stops with Ctrl+C).
   -h, --help  Show this manual.
 
 Environment overrides:
   CONTROL_PLANE_ADDRESS  Control-plane SSH address (default: 192.168.2.100).
-  GITEA_PORT             Browser and port-forward port (default: 8080).
+  GITEA_PORT             Gitea port (default: 8080).
+  PROMETHEUS_PORT        Prometheus port (default: 9090).
+  LONGHORN_PORT          Longhorn UI port (default: 8081).
+  GRAFANA_PORT           Grafana port (default: 30090).
+  DASHBOARD_PORT         Ruby dashboard port (default: 30080).
   RUN_STATE_DIR          Alternate PID and log directory.
 
-Open http://192.168.2.100:8080 after starting. Logs and the PID file are
-stored under ~/.local/state/proxmox-k3s-gitea by default.
+Service ports: Gitea 8080, Prometheus 9090, Longhorn 8081, Grafana 30090,
+Ruby dashboard 30080. State is under ~/.local/state/proxmox-k3s-gitea.
 EOF
 }
 
@@ -37,37 +45,75 @@ running() {
   [[ -s $pid_file ]] && kill -0 "$(<"$pid_file")" 2>/dev/null
 }
 
-start() {
+start_forward() {
+  local name=$1 namespace=$2 service=$3 ports=$4
+  pid_file=$state_dir/$name-port-forward.pid
+  log_file=$state_dir/$name-port-forward.log
   if running; then
-    printf 'Gitea port-forward is already running (PID %s).\n' "$(<"$pid_file")"
-    status
+    printf '%s port-forward is already running (PID %s).\n' "$name" "$(<"$pid_file")"
     return
   fi
-  mkdir -p "$state_dir"
-  chmod 700 "$state_dir"
   rm -f "$pid_file"
   nohup ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
     "debian@${control_plane_address}" \
-    "sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n gitea port-forward svc/gitea ${gitea_port}:80 --address 0.0.0.0" \
+    "sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n $namespace port-forward $service $ports --address 0.0.0.0" \
     >>"$log_file" 2>&1 </dev/null &
   printf '%s\n' "$!" > "$pid_file"
   sleep 1
   if ! running; then
     rm -f "$pid_file"
-    printf 'Gitea port-forward failed to start. See %s\n' "$log_file" >&2
-    exit 1
+    printf '%s port-forward failed to start. See %s\n' "$name" "$log_file" >&2
+    return 1
   fi
-  printf 'Started Gitea port-forward (PID %s).\n' "$(<"$pid_file")"
-  printf 'Open: http://%s:%s\nLog: %s\n' "$control_plane_address" "$gitea_port" "$log_file"
+  printf 'Started %s port-forward (PID %s).\n' "$name" "$(<"$pid_file")"
 }
 
-stop() {
-  if ! running; then
-    rm -f "$pid_file"
-    echo 'Gitea port-forward is not running.'
+start_docs() {
+  pid_file=$state_dir/docs-port-forward.pid
+  log_file=$state_dir/docs-port-forward.log
+  if running; then
     return
   fi
+  nohup python3 -m http.server "$docs_port" --bind 0.0.0.0 \
+    --directory "${script_dir}/docs" >>"$log_file" 2>&1 </dev/null &
+  printf '%s\n' "$!" > "$pid_file"
+  sleep 1
+  if ! running; then
+    rm -f "$pid_file"
+    printf 'Documentation server failed to start. See %s\n' "$log_file" >&2
+    return 1
+  fi
+  printf 'Started documentation server (PID %s).\n' "$(<"$pid_file")"
+}
+
+start() {
+  mkdir -p "$state_dir"
+  chmod 700 "$state_dir"
+  start_forward gitea gitea svc/gitea "${gitea_port}:80"
+  start_forward prometheus monitoring svc/monitoring-kube-prometheus-prometheus "${prometheus_port}:9090"
+  start_forward longhorn longhorn-system svc/longhorn-frontend "${longhorn_port}:80"
+  start_forward grafana monitoring svc/monitoring-grafana "${grafana_port}:80"
+  start_forward ruby-dashboard gentoo-ruby svc/ruby-build-dashboard "${dashboard_port}:8080"
+  start_docs
+  printf 'Docs:       http://%s:%s\n' "$control_plane_address" "$docs_port"
+  printf 'Gitea:      http://%s:%s\n' "$control_plane_address" "$gitea_port"
+  printf 'Prometheus: http://%s:%s\n' "$control_plane_address" "$prometheus_port"
+  printf 'Longhorn:   http://%s:%s\n' "$control_plane_address" "$longhorn_port"
+  printf 'Grafana:    http://%s:%s\n' "$control_plane_address" "$grafana_port"
+  printf 'Ruby:       http://%s:%s\n' "$control_plane_address" "$dashboard_port"
+  printf 'Logs:       %s\n' "$state_dir"
+}
+
+stop_forward() {
+  local name=$1
+  pid_file=$state_dir/$name-port-forward.pid
+  if ! running; then
+    rm -f "$pid_file"
+    printf '%s port-forward is not running.\n' "$name"
+    return
+  fi
+  local pid
   pid=$(<"$pid_file")
   kill "$pid"
   for _ in {1..20}; do
@@ -77,16 +123,38 @@ stop() {
     sleep 0.25
   done
   rm -f "$pid_file"
-  echo 'Gitea port-forward stopped.'
+  printf '%s port-forward stopped.\n' "$name"
+}
+
+stop() {
+  stop_forward gitea
+  stop_forward prometheus
+  stop_forward longhorn
+  stop_forward grafana
+  stop_forward ruby-dashboard
+  stop_forward docs
+}
+
+status_forward() {
+  local name=$1 port=$2
+  pid_file=$state_dir/$name-port-forward.pid
+  if running; then
+    printf '%s: running (PID %s) — http://%s:%s\n' "$name" "$(<"$pid_file")" "$control_plane_address" "$port"
+  else
+    printf '%s: stopped\n' "$name"
+    return 1
+  fi
 }
 
 status() {
-  if running; then
-    printf 'Running (PID %s): http://%s:%s\n' "$(<"$pid_file")" "$control_plane_address" "$gitea_port"
-  else
-    echo 'Stopped.'
-    return 1
-  fi
+  local result=0
+  status_forward gitea "$gitea_port" || result=1
+  status_forward prometheus "$prometheus_port" || result=1
+  status_forward longhorn "$longhorn_port" || result=1
+  status_forward grafana "$grafana_port" || result=1
+  status_forward ruby-dashboard "$dashboard_port" || result=1
+  status_forward docs "$docs_port" || result=1
+  return "$result"
 }
 
 foreground() {
@@ -110,16 +178,18 @@ case $command_name in
   *) printf 'Unknown command: %s\n\n' "$command_name" >&2; usage >&2; exit 2 ;;
 esac
 
-for required_command in ssh ssh-keygen; do
+for required_command in ssh ssh-keygen python3; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     echo "$required_command is required" >&2
     exit 1
   fi
 done
-if [[ ! $gitea_port =~ ^[0-9]+$ || $gitea_port -lt 1 || $gitea_port -gt 65535 ]]; then
-  echo 'GITEA_PORT must be between 1 and 65535' >&2
-  exit 2
-fi
+for port in "$gitea_port" "$prometheus_port" "$longhorn_port" "$grafana_port" "$dashboard_port" "$docs_port"; do
+  if [[ ! $port =~ ^[0-9]+$ || $port -lt 1 || $port -gt 65535 ]]; then
+    echo 'Service ports must be between 1 and 65535' >&2
+    exit 2
+  fi
+done
 
 case $command_name in
   start) start ;;

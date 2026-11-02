@@ -168,14 +168,21 @@ kubectl -n "$namespace" create secret generic gitea-runner-credentials \
   --from-literal=GITEA_REPOSITORY="$GITEA_REPOSITORY" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+build_worker=${RUBY_BUILD_WORKER:-${workers[RANDOM % ${#workers[@]}]}}
+log "Initial Ruby build selected on $build_worker; all three runners stay online"
 for worker in "${workers[@]}"; do
   log "Deploying Gentoo builder on $worker"
+  build_on_start=false
+  if [[ $worker == "$build_worker" ]]; then
+    build_on_start=true
+  fi
   manifest=$(<"${script_dir}/05-ruby-build/gentoo-builder.yaml")
   manifest=${manifest//'${WORKER_NAME}'/$worker}
   manifest=${manifest//'${GENTOO_IMAGE}'/${GENTOO_IMAGE:-gentoo/stage3:latest}}
   manifest=${manifest//'${ACT_RUNNER_VERSION}'/${ACT_RUNNER_VERSION:-0.2.12}}
   manifest=${manifest//'${ACT_RUNNER_SHA256}'/${ACT_RUNNER_SHA256:-be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a22e34ba11e}}
   manifest=${manifest//'${RUBY_VERSION}'/${RUBY_VERSION:-3.4.11}}
+  manifest=${manifest//'${RUBY_BUILD_ON_START}'/$build_on_start}
   kubectl apply -f - <<<"$manifest"
   kubectl -n "$namespace" rollout restart "statefulset/ruby-builder-$worker"
 done

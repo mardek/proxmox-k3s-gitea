@@ -1,6 +1,6 @@
 # Gentoo Ruby builders
 
-Deploys one Gentoo StatefulSet on each K3s worker. Each pod installs a Gitea Actions runner, builds Ruby from source, gathers timing and resource metrics, publishes release assets, and sends a report to the central dashboard.
+Deploys one Gentoo StatefulSet on each K3s worker. All three Pods and Gitea Actions runners remain online, but each deployment selects only one random worker for the initial Ruby build to avoid three simultaneous compilations. Gitea can schedule later jobs across all available runners. Successful builds gather timing and resource metrics, publish release assets, and send a report to the central dashboard.
 
 ## Prerequisites
 
