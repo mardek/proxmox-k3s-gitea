@@ -160,11 +160,11 @@ log "Waiting for all four Kubernetes nodes to become Ready"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo '${remote_dir}/02-kubernetes/wait-for-cluster' 4 600"
 
-log "Installing Helm on the control plane"
+log "Checking Helm on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo '${remote_dir}/02-kubernetes/install-helm'"
 
-log "Installing K9s on the control plane"
+log "Checking K9s on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo '${remote_dir}/02-kubernetes/install-k9s'"
 
