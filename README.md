@@ -2,6 +2,12 @@
 
 Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via Cloud-Init, Gitea via Helm, Longhorn distributed storage, and Prometheus + Grafana monitoring.
 
+## Lab addresses
+
+In this exercise, `192.168.2.22` is the Proxmox server's primary management address. Use it for the Proxmox web interface, API, and SSH access.
+
+`192.168.2.100` is the K3s control-plane address and the primary access point for lab services exposed through NodePorts or SSH port-forwards. The Kubernetes API also listens here. It is not strictly the “cluster ingress”: in Kubernetes, Ingress refers to HTTP/S routing through a controller such as Traefik.
+
 ## Quick Start
 
 Run these commands on the Debian administration VM:
