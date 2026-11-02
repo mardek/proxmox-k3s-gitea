@@ -110,26 +110,47 @@ When worker 2 returns, Longhorn restores its replica and the volume returns to a
 
 ## Quick Start
 
+Run these commands on the Debian administration VM:
+
 ```bash
-# 1. Proxmox credentials and SSH key in agent
-export PROXMOX_VE_API_TOKEN="root@pam!tokenname=uuid"
+# Load the SSH key used for Proxmox and the cluster
 ssh-add ~/.ssh/id_ed25519
 
-# 2. Create VMs (Terraform)
-cp 01-vms/terraform.tfvars.example 01-vms/terraform.tfvars
-# edit 01-vms/terraform.tfvars
-01-vms/install-providers.sh
-TF_CLI_CONFIG_FILE="$PWD/01-vms/.terraform-provider-mirror/terraform.rc" terraform -chdir=01-vms init
-terraform -chdir=01-vms apply
-
-# 3. Full deploy (includes Longhorn + Gitea)
+# Create the VMs and install K3s, Longhorn, and Gitea
 ./deploy.sh
 
-# 4. Access Gitea
-./run.sh
+# Open persistent access to Gitea
+./run.sh start
 ```
 
-Both deployment scripts prompt for missing credentials and save them locally with owner-only permissions. Missing exports are also appended to existing `.bashrc` and `.zshrc` files. Use `./deploy.sh --reconfigure` or `./deploy-ruby.sh --reconfigure` to replace saved values, and `--help` for each script's manual.
+Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts for the Proxmox API token and Gitea administrator password. Settings are saved in `.proxmox-env` with owner-only permissions and reused on later runs. Missing exports are also appended to existing `.bashrc` and `.zshrc` files.
+
+Use `./deploy.sh --reconfigure` to replace saved credentials and `./deploy.sh --help` for all options.
+
+### Manage Gitea access
+
+```bash
+./run.sh start       # Start in the background; survives SSH logout
+./run.sh status      # Check the process and display the URL
+./run.sh stop        # Stop access
+./run.sh restart     # Restart access
+./run.sh foreground  # Optional terminal-bound mode
+./run.sh --help      # Manual and environment overrides
+```
+
+The background PID and log are stored in `~/.local/state/proxmox-k3s-gitea/`.
+
+### Deploy the Ruby build lab
+
+After creating the `admin/ruby` repository in Gitea:
+
+```bash
+./deploy-ruby.sh
+```
+
+The script requests the internal Gitea URL, repository name, Actions runner registration token, and release publishing token. Use `http://gitea.gitea.svc.cluster.local` and `admin/ruby` for this lab. Settings are saved in `.ruby-build.env`; run `./deploy-ruby.sh --reconfigure` after rotating credentials.
+
+Three Gentoo builders compile and test Ruby as an unprivileged user, publish releases to Gitea, and send metrics to `http://192.168.2.100:30080`. See [the Ruby builder guide](05-ruby-build/README.md) for token setup and monitoring.
 
 ## Repository Layout
 
