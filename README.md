@@ -4,16 +4,7 @@ Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Admin["Debian admin<br/>Terraform + deploy"] --> Proxmox["Proxmox<br/>4 Debian VMs"]
-    Proxmox --> Control["k3s-control<br/>192.168.2.100"]
-    Proxmox --> Workers["3 K3s workers<br/>192.168.2.101–103"]
-    Control --> Platform["Gitea · Longhorn<br/>Prometheus · Grafana"]
-    Workers --> Ruby["Gentoo Ruby builders<br/>Gitea Actions runners"]
-```
-
-See the separate [deployment and cluster architecture](docs/deployment-cluster-architecture.md) page for the detailed diagram.
+See the separate [deployment and cluster architecture](docs/deployment-cluster-architecture.md) page.
 
 ### Applications and distributed storage
 
@@ -120,7 +111,28 @@ The background PID and log are stored in `~/.local/state/proxmox-k3s-gitea/`.
 
 The main deployment installs `kube-prometheus-stack` in the `monitoring` namespace. Open Grafana at `http://192.168.2.100:30090` and log in as `admin`; its initial password matches `GITEA_ADMIN_PASSWORD` unless `GRAFANA_ADMIN_PASSWORD` is set.
 
-Prometheus retains 15 days of node, Pod, container, disk, network, and Longhorn metrics on a 20 Gi Longhorn volume. Grafana includes prebuilt Kubernetes and node dashboards. To reinstall only monitoring, copy `06-monitoring/` to the control plane and run `sudo ./06-monitoring/install` with `GRAFANA_ADMIN_PASSWORD` set.
+Prometheus retains 15 days of node, Pod, container, disk, network, and Longhorn metrics on a 20 Gi Longhorn volume. Node Exporter reports CPU, memory, filesystem, disk I/O, and network usage for every VM. kube-state-metrics reports Kubernetes resource health and container consumption. Grafana includes prebuilt dashboards for cluster and node history, including CPU, memory, disk, network, and Pod usage over selectable time ranges.
+
+To reinstall only monitoring, copy `06-monitoring/` to the control plane and run `sudo ./06-monitoring/install` with `GRAFANA_ADMIN_PASSWORD` set.
+
+### Service access
+
+| Service | Address or port | Access method |
+|---------|-----------------|---------------|
+| Proxmox | `https://192.168.2.22:8006` | Direct web interface |
+| Gitea | `http://192.168.2.100:8080` | Start with `./run start` |
+| Ruby build dashboard | `http://192.168.2.100:30080` | NodePort, available after `./deploy-ruby` |
+| Grafana | `http://192.168.2.100:30090` | NodePort, installed by `./deploy` |
+| Kubernetes API | `192.168.2.100:6443` | Administrative access with kubeconfig |
+| Prometheus | `192.168.2.100:9090` | Port-forward, command below |
+| Longhorn UI | `192.168.2.100:8081` | Port-forward, command below |
+
+Prometheus and the Longhorn UI remain internal ClusterIP services. To access them temporarily, run these commands on the control plane:
+
+```bash
+sudo kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 --address 0.0.0.0
+sudo kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80 --address 0.0.0.0
+```
 
 ### Deploy the Ruby build lab
 
