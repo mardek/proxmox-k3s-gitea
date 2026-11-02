@@ -9,8 +9,8 @@ reconfigure=false
 
 usage() {
   cat <<'EOF'
-Usage: ./deploy-ruby.sh [--reconfigure]
-       ./deploy-ruby.sh -h | --help
+Usage: ./deploy-ruby [--reconfigure]
+       ./deploy-ruby -h | --help
 
 Deploy three Gentoo Ruby builders and the metrics dashboard on K3s.
 Missing settings are requested interactively and saved in .ruby-build.env
@@ -122,8 +122,8 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
   done
   ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
     "mkdir -p '${remote_dir}/05-ruby-build'"
-  scp -q "${ssh_options[@]}" "${script_dir}/deploy-ruby.sh" \
-    "debian@${control_plane_address}:${remote_dir}/deploy-ruby.sh"
+  scp -q "${ssh_options[@]}" "${script_dir}/deploy-ruby" \
+    "debian@${control_plane_address}:${remote_dir}/deploy-ruby"
   scp -q "${ssh_options[@]}" "${script_dir}/05-ruby-build/"* \
     "debian@${control_plane_address}:${remote_dir}/05-ruby-build/"
   {
@@ -135,7 +135,7 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
     printf 'export ACT_RUNNER_VERSION=%q\n' "${ACT_RUNNER_VERSION:-0.2.12}"
     printf 'export ACT_RUNNER_SHA256=%q\n' "${ACT_RUNNER_SHA256:-be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a22e34ba11e}"
     printf 'export RUBY_VERSION=%q\n' "${RUBY_VERSION:-3.4.11}"
-    printf 'RUBY_DEPLOY_REMOTE=true bash %q\n' "${remote_dir}/deploy-ruby.sh"
+    printf 'RUBY_DEPLOY_REMOTE=true bash %q\n' "${remote_dir}/deploy-ruby"
   } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
   exit
 fi
@@ -156,8 +156,8 @@ kubectl apply -f "${script_dir}/05-ruby-build/dashboard.yaml"
 
 log "Installing build scripts and runner credentials"
 kubectl -n "$namespace" create configmap ruby-build-scripts \
-  --from-file=entrypoint.sh="${script_dir}/05-ruby-build/entrypoint.sh" \
-  --from-file=build-ruby.sh="${script_dir}/05-ruby-build/build-ruby.sh" \
+  --from-file=entrypoint="${script_dir}/05-ruby-build/entrypoint" \
+  --from-file=build-ruby="${script_dir}/05-ruby-build/build-ruby" \
   --from-file=dashboard.py="${script_dir}/05-ruby-build/dashboard.py" \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n "$namespace" rollout restart deployment/ruby-build-dashboard

@@ -9,8 +9,8 @@ log_file=$state_dir/gitea-port-forward.log
 
 usage() {
   cat <<'EOF'
-Usage: ./run.sh [start|stop|restart|status|foreground]
-       ./run.sh -h | --help
+Usage: ./run [start|stop|restart|status|foreground]
+       ./run -h | --help
 
 Manage persistent access to Gitea through a background SSH port-forward.
 The default command is start. The process survives terminal and SSH logout.

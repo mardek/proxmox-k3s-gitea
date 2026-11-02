@@ -13,4 +13,4 @@ log "Applying RWX test workload"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo kubectl apply -f -' \
   < "${script_dir}/test-rwx.yaml"
 
-"${script_dir}/validate.sh"
+"${script_dir}/validate"

@@ -1,43 +1,10 @@
 # Proxmox + K3s + Gitea Lab
 
-Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via Cloud-Init, Gitea via Helm, and Longhorn distributed storage by default.
+Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via Cloud-Init, Gitea via Helm, Longhorn distributed storage, and Prometheus + Grafana monitoring.
 
 ## Architecture
 
-### Deployment and cluster
-
-```mermaid
-flowchart TB
-    subgraph Admin["Debian administration VM"]
-        Deploy["deploy.sh"]
-        Tools["diagnose.sh · run.sh"]
-        Deploy --> Terraform["Terraform"]
-        Deploy --> SSH["SSH installation"]
-    end
-
-    subgraph Proxmox["Proxmox host: bao · 192.168.2.22"]
-        Template["VM 9000<br/>Debian 12 Cloud-Init template"]
-        subgraph Cluster["K3s cluster"]
-            Control["VM 100 · k3s-control<br/>192.168.2.100<br/>Kubernetes API · Scheduler<br/>Helm · K9s · Longhorn"]
-            Worker1["VM 101 · k3s-worker-1<br/>192.168.2.101<br/>K3s agent · Pods · Longhorn"]
-            Worker2["VM 102 · k3s-worker-2<br/>192.168.2.102<br/>K3s agent · Pods · Longhorn"]
-            Worker3["VM 103 · k3s-worker-3<br/>192.168.2.103<br/>K3s agent · Pods · Longhorn"]
-        end
-    end
-
-    Terraform -->|"Proxmox API"| Template
-    Template --> Control
-    Template --> Worker1
-    Template --> Worker2
-    Template --> Worker3
-    SSH --> Control
-    Control --> Worker1
-    Control --> Worker2
-    Control --> Worker3
-
-    System["System services<br/>CoreDNS · Traefik · ServiceLB<br/>metrics-server · local-path"]
-    Control --- System
-```
+See the separate [deployment and cluster architecture](docs/deployment-cluster-architecture.md) page.
 
 ### Applications and distributed storage
 
@@ -62,7 +29,7 @@ flowchart TB
         ReplicaC --- PathC["/var/lib/longhorn/"]
     end
 
-    User["User"] -->|"http://192.168.2.100:8080"| Forward["run.sh SSH port-forward"]
+    User["User"] -->|"http://192.168.2.100:8080"| Forward["run SSH port-forward"]
     Forward --> Service["Gitea ClusterIP Service"]
     Service --> Gitea
     Optional["Optional hostname"] --> Ingress["Traefik Ingress"]
@@ -117,40 +84,57 @@ Run these commands on the Debian administration VM:
 ssh-add ~/.ssh/id_ed25519
 
 # Create the VMs and install K3s, Longhorn, and Gitea
-./deploy.sh
+./deploy
 
 # Open persistent access to Gitea
-./run.sh start
+./run start
 ```
 
 Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts for the Proxmox API token and Gitea administrator password. Settings are saved in `.proxmox-env` with owner-only permissions and reused on later runs. Missing exports are also appended to existing `.bashrc` and `.zshrc` files.
 
-Use `./deploy.sh --reconfigure` to replace saved credentials and `./deploy.sh --help` for all options.
+Use `./deploy --reconfigure` to replace saved credentials and `./deploy --help` for all options.
 
 ### Manage Gitea access
 
 ```bash
-./run.sh start       # Start in the background; survives SSH logout
-./run.sh status      # Check the process and display the URL
-./run.sh stop        # Stop access
-./run.sh restart     # Restart access
-./run.sh foreground  # Optional terminal-bound mode
-./run.sh --help      # Manual and environment overrides
+./run start       # Start in the background; survives SSH logout
+./run status      # Check the process and display the URL
+./run stop        # Stop access
+./run restart     # Restart access
+./run foreground  # Optional terminal-bound mode
+./run --help      # Manual and environment overrides
 ```
 
 The background PID and log are stored in `~/.local/state/proxmox-k3s-gitea/`.
+
+### Prometheus and Grafana
+
+The main deployment installs `kube-prometheus-stack` in the `monitoring` namespace. Open Grafana at `http://192.168.2.100:30090` and log in as `admin`; its initial password matches `GITEA_ADMIN_PASSWORD` unless `GRAFANA_ADMIN_PASSWORD` is set.
+
+Prometheus retains 15 days of node, Pod, container, disk, network, and Longhorn metrics on a 20 Gi Longhorn volume. Grafana includes prebuilt Kubernetes and node dashboards. To reinstall only monitoring, copy `06-monitoring/` to the control plane and run `sudo ./06-monitoring/install` with `GRAFANA_ADMIN_PASSWORD` set.
 
 ### Deploy the Ruby build lab
 
 After creating the `admin/ruby` repository in Gitea:
 
 ```bash
-./deploy-ruby.sh
+./deploy-ruby
 ```
 
-The script requests the internal Gitea URL, repository name, Actions runner registration token, and release publishing token. Use `http://gitea.gitea.svc.cluster.local` and `admin/ruby` for this lab. Settings are saved in `.ruby-build.env`; run `./deploy-ruby.sh --reconfigure` after rotating credentials.
+The script requests the internal Gitea URL, repository name, Actions runner registration token, and release publishing token. Use `http://gitea.gitea.svc.cluster.local` and `admin/ruby` for this lab. Settings are saved in `.ruby-build.env`; run `./deploy-ruby --reconfigure` after rotating credentials.
 
 Three Gentoo builders compile and test Ruby as an unprivileged user, publish releases to Gitea, and send metrics to `http://192.168.2.100:30080`. See [the Ruby builder guide](05-ruby-build/README.md) for token setup and monitoring.
+
+### Monitor and diagnose
+
+```bash
+./monitor                  # Live nodes, Pods, Services, PVs, PVCs, and logs
+./monitor --interval 10    # Refresh every ten seconds
+./monitor --once           # Fetch one snapshot
+./diagnose                 # Full checks plus a ZIP archive in /tmp
+```
+
+The monitor displays recent K3s logs from the control plane and all workers, plus the latest Ruby builder logs. Diagnostics are saved as `/tmp/k3s-diagnostics-<timestamp>.zip`; the `zip` package is required on the administration VM.
 
 ## Repository Layout
 
@@ -161,12 +145,13 @@ Three Gentoo builders compile and test Ruby as an unprivileged user, publish rel
 | `03-gitea/` | Gitea Helm deployment |
 | `04-longhorn/` | Longhorn distributed storage |
 | `05-ruby-build/` | Gentoo Ruby builders, Gitea runners, and metrics dashboard |
-| `deploy.sh` | One-shot deploy from scratch |
-| `deploy-ruby.sh` | Deploy three Ruby builders and the metrics dashboard |
-| `destroy.sh` | Complete teardown |
-| `diagnose.sh` | Health check all layers |
-| `run.sh` | Port-forward to access Gitea |
-| `install-terraform-debian.sh` | Install Terraform on Debian 12 |
+| `06-monitoring/` | Prometheus history and Grafana dashboards |
+| `deploy` | One-shot deploy from scratch |
+| `deploy-ruby` | Deploy three Ruby builders and the metrics dashboard |
+| `destroy` | Complete teardown |
+| `diagnose` | Health check all layers |
+| `run` | Port-forward to access Gitea |
+| `install-terraform-debian` | Install Terraform on Debian 12 |
 | `docs/superpowers/` | Implementation plans + design specs |
 
 ## Storage
@@ -185,6 +170,7 @@ Three Gentoo builders compile and test Ruby as an unprivileged user, publish rel
 
 ## Design Docs
 
+- [Deployment and cluster architecture](docs/deployment-cluster-architecture.md)
 - [Proxmox-K3s-Gitea Design](docs/superpowers/specs/2026-10-26-proxmox-k3s-gitea-design.md)
 - [Longhorn RWX Design](docs/superpowers/specs/2026-10-26-longhorn-rwx-design.md)
 - [Implementation Plan](docs/superpowers/plans/2026-10-26-proxmox-k3s-gitea.md)

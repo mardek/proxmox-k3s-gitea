@@ -7,8 +7,8 @@ reconfigure=false
 
 usage() {
   cat <<'EOF'
-Usage: ./deploy.sh [--reconfigure]
-       ./deploy.sh -h | --help
+Usage: ./deploy [--reconfigure]
+       ./deploy -h | --help
 
 Create the Proxmox VMs, install K3s and Longhorn, and deploy Gitea.
 Missing settings are requested interactively and saved in .proxmox-env
@@ -116,7 +116,7 @@ if [[ -z ${GITEA_ADMIN_PASSWORD:-} ]]; then
 fi
 
 log "Preparing the local Terraform provider mirror"
-"${script_dir}/01-vms/install-providers.sh"
+"${script_dir}/01-vms/install-providers"
 export TF_CLI_CONFIG_FILE="${script_dir}/01-vms/.terraform-provider-mirror/terraform.rc"
 
 log "Loading the SSH key and testing Proxmox access"
@@ -144,37 +144,46 @@ done
 
 log "Copying deployment scripts to the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "mkdir -p '${remote_dir}/02-kubernetes' '${remote_dir}/03-gitea' '${remote_dir}/04-longhorn'"
-scp -q "${ssh_options[@]}" "${script_dir}/02-kubernetes/"*.sh \
+  "mkdir -p '${remote_dir}/02-kubernetes' '${remote_dir}/03-gitea' '${remote_dir}/04-longhorn' '${remote_dir}/06-monitoring'"
+scp -q "${ssh_options[@]}" "${script_dir}/02-kubernetes/"* \
   "debian@${control_plane_address}:${remote_dir}/02-kubernetes/"
-scp -q "${ssh_options[@]}" "${script_dir}/03-gitea/install.sh" "${script_dir}/03-gitea/values.yaml" \
+scp -q "${ssh_options[@]}" "${script_dir}/03-gitea/install" "${script_dir}/03-gitea/values.yaml" \
   "debian@${control_plane_address}:${remote_dir}/03-gitea/"
-scp -q "${ssh_options[@]}" "${script_dir}/04-longhorn/"*.sh "${script_dir}/04-longhorn/"*.yaml \
+scp -q "${ssh_options[@]}" "${script_dir}/04-longhorn/"* "${script_dir}/04-longhorn/"*.yaml \
   "debian@${control_plane_address}:${remote_dir}/04-longhorn/"
+scp -q "${ssh_options[@]}" "${script_dir}/06-monitoring/install" "${script_dir}/06-monitoring/values.yaml" \
+  "debian@${control_plane_address}:${remote_dir}/06-monitoring/"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "chmod +x '${remote_dir}/02-kubernetes/'*.sh '${remote_dir}/03-gitea/install.sh' '${remote_dir}/04-longhorn/'*.sh"
+  "chmod +x '${remote_dir}/02-kubernetes/'* '${remote_dir}/03-gitea/install' '${remote_dir}/04-longhorn/'* '${remote_dir}/06-monitoring/install'"
 
 log "Waiting for all four Kubernetes nodes to become Ready"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/wait-for-cluster.sh' 4 600"
+  "sudo '${remote_dir}/02-kubernetes/wait-for-cluster' 4 600"
 
 log "Installing Helm on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/install-helm.sh'"
+  "sudo '${remote_dir}/02-kubernetes/install-helm'"
 
 log "Installing K9s on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/install-k9s.sh'"
+  "sudo '${remote_dir}/02-kubernetes/install-k9s'"
 
 log "Installing Longhorn distributed storage"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/04-longhorn/install.sh'"
+  "sudo '${remote_dir}/04-longhorn/install'"
+
+log "Installing Prometheus and Grafana"
+{
+  printf 'export GRAFANA_ADMIN_PASSWORD=%q\n' "${GRAFANA_ADMIN_PASSWORD:-$GITEA_ADMIN_PASSWORD}"
+  printf 'export CONTROL_PLANE_ADDRESS=%q\n' "$control_plane_address"
+  printf "'%s/06-monitoring/install'\n" "$remote_dir"
+} | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
 
 log "Installing or upgrading Gitea with Helm"
 {
   printf 'export GITEA_ADMIN_PASSWORD=%q\n' "$GITEA_ADMIN_PASSWORD"
   printf 'export GITEA_HOST=%q\n' "${GITEA_HOST:-}"
-  printf "'%s/03-gitea/install.sh'\n" "$remote_dir"
+  printf "'%s/03-gitea/install'\n" "$remote_dir"
 } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
 
 log "Deployment completed successfully"

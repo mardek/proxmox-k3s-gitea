@@ -21,7 +21,7 @@ spec:
         - name: gentoo
           image: ${GENTOO_IMAGE}
           imagePullPolicy: IfNotPresent
-          command: [/bin/bash, /opt/ruby-build/entrypoint.sh]
+          command: [/bin/bash, /opt/ruby-build/entrypoint]
           env:
             - name: WORKER_NAME
               value: ${WORKER_NAME}

@@ -14,4 +14,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Ruby and publish metrics
-        run: /opt/ruby-build/build-ruby.sh
+        run: /opt/ruby-build/build-ruby

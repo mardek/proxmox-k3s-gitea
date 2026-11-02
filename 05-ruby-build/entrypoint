@@ -70,7 +70,7 @@ if [[ ${RUBY_BUILD_ON_START:-true} == true ]]; then
   fi
   mkdir -p /data/builds
   chown builder:builder /data/builds
-  runuser -u builder -- /opt/ruby-build/build-ruby.sh || true
+  runuser -u builder -- /opt/ruby-build/build-ruby || true
 fi
 
 log "Starting the Gitea Actions runner"

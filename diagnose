@@ -8,6 +8,15 @@ worker_addresses=${WORKER_ADDRESSES:-"192.168.2.101 192.168.2.102 192.168.2.103"
 ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 failures=0
 
+if ! command -v zip >/dev/null 2>&1; then
+  echo 'zip is required to create the diagnostic archive' >&2
+  exit 1
+fi
+report_dir=$(mktemp -d /tmp/k3s-diagnostics.XXXXXX)
+archive=/tmp/k3s-diagnostics-$(date -u +%Y%m%dT%H%M%SZ).zip
+report_file=$report_dir/diagnostics.txt
+
+collect_diagnostics() {
 section() {
   printf '\n==> %s\n' "$*"
 }
@@ -40,6 +49,9 @@ if ! ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo true'; then
   echo "Cannot run diagnostics on ${control_plane_address}" >&2
   exit 1
 fi
+
+section "Fetching live cluster resources and node logs"
+run "${script_dir}/monitor" --once
 
 if command -v terraform >/dev/null 2>&1; then
   section "Validating Terraform configuration"
@@ -81,6 +93,11 @@ section "Checking Helm and K9s versions"
 control 'helm version --short'
 control 'k9s version'
 
+section "Checking Prometheus and Grafana"
+control 'env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm list -n monitoring'
+control 'kubectl -n monitoring get pods,pvc,svc -o wide'
+control 'kubectl -n monitoring get prometheus,servicemonitor'
+
 section "Checking Gitea Helm release"
 control 'env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm list -n gitea'
 
@@ -104,3 +121,11 @@ if (( failures > 0 )); then
 fi
 
 echo "All diagnostic checks completed without command failures."
+}
+
+collect_diagnostics 2>&1 | tee "$report_file"
+diagnostic_status=${PIPESTATUS[0]}
+zip -j -q "$archive" "$report_file"
+rm -rf "$report_dir"
+printf '\nDiagnostic archive: %s\n' "$archive"
+exit "$diagnostic_status"

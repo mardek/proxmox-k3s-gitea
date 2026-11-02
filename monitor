@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
+worker_addresses=${WORKER_ADDRESSES:-"192.168.2.101 192.168.2.102 192.168.2.103"}
+ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+interval=5
+once=false
+
+usage() {
+  cat <<'EOF'
+Usage: ./monitor [--once] [--interval SECONDS]
+       ./monitor -h | --help
+
+Watch Kubernetes nodes, Pods, Services, PVs, PVCs, Ruby builders, and recent
+K3s control-plane/worker logs. The default refresh interval is five seconds.
+Press Ctrl+C to stop.
+
+Options:
+  --once              Fetch one snapshot and exit.
+  --interval SECONDS  Set the refresh interval (default: 5).
+  -h, --help          Show this manual.
+
+Environment overrides:
+  CONTROL_PLANE_ADDRESS  Default: 192.168.2.100
+  WORKER_ADDRESSES       Space-separated worker IPs.
+EOF
+}
+
+while (($#)); do
+  case $1 in
+    --once) once=true ;;
+    --interval)
+      shift
+      if [[ ! ${1:-} =~ ^[1-9][0-9]*$ ]]; then
+        echo '--interval requires a positive number of seconds' >&2
+        exit 2
+      fi
+      interval=$1
+      ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if ! command -v ssh >/dev/null 2>&1; then
+  echo 'ssh is required' >&2
+  exit 1
+fi
+
+section() {
+  printf '\n==> %s\n' "$*"
+}
+
+control() {
+  ssh "${ssh_options[@]}" "debian@${control_plane_address}" "sudo $*" 2>&1
+}
+
+snapshot() {
+  printf 'Cluster monitor — %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+  section 'Nodes'
+  control 'kubectl get nodes -o wide'
+  section 'Pods'
+  control 'kubectl get pods -A -o wide'
+  section 'Services'
+  control 'kubectl get services -A -o wide'
+  section 'Persistent volumes and claims'
+  control 'kubectl get pv -o wide'
+  control 'kubectl get pvc -A -o wide'
+  section 'Ruby builder logs'
+  control 'kubectl -n gentoo-ruby logs ruby-builder-k3s-worker-1-0 --tail=15'
+  control 'kubectl -n gentoo-ruby logs ruby-builder-k3s-worker-2-0 --tail=15'
+  control 'kubectl -n gentoo-ruby logs ruby-builder-k3s-worker-3-0 --tail=15'
+  for address in "$control_plane_address" $worker_addresses; do
+    section "K3s logs on ${address}"
+    ssh "${ssh_options[@]}" "debian@${address}" \
+      'sudo journalctl -u k3s -u k3s-agent -n 15 --no-pager' 2>&1
+  done
+}
+
+while true; do
+  if [[ $once != true && -t 1 ]]; then
+    clear
+  fi
+  snapshot
+  if [[ $once == true ]]; then
+    break
+  fi
+  printf '\nRefreshing every %s seconds. Press Ctrl+C to stop.\n' "$interval"
+  sleep "$interval"
+done

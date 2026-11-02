@@ -15,10 +15,10 @@ Deploys one Gentoo StatefulSet on each K3s worker. Each pod installs a Gitea Act
 ## Deploy
 
 ```bash
-./deploy-ruby.sh
+./deploy-ruby
 ```
 
-The script prompts for missing settings and saves them in `.ruby-build.env` with owner-only permissions. Missing exports are also appended to existing `.bashrc` and `.zshrc` files. Later runs reuse those values. Tokens are hidden while typing. Run `./deploy-ruby.sh --reconfigure` to change saved settings, or `./deploy-ruby.sh --help` for the complete manual. Deployment restarts all three builders and starts a new initial build.
+The script prompts for missing settings and saves them in `.ruby-build.env` with owner-only permissions. Missing exports are also appended to existing `.bashrc` and `.zshrc` files. Later runs reuse those values. Tokens are hidden while typing. Run `./deploy-ruby --reconfigure` to change saved settings, or `./deploy-ruby --help` for the complete manual. Deployment restarts all three builders and starts a new initial build.
 
 Use these values for the local lab:
 
@@ -38,7 +38,7 @@ export GITEA_URL='http://gitea.gitea.svc.cluster.local'
 export GITEA_RUNNER_TOKEN='actions-registration-token'
 export GITEA_PUBLISH_TOKEN='release-upload-token'
 export GITEA_REPOSITORY='admin/ruby'
-./deploy-ruby.sh
+./deploy-ruby
 ```
 
 Optional versions:
@@ -71,7 +71,7 @@ Run the build as the same unprivileged user:
 
 ```bash
 ssh -t debian@192.168.2.100 \
-  'sudo kubectl -n gentoo-ruby exec ruby-builder-k3s-worker-1-0 -- runuser -u builder -- /opt/ruby-build/build-ruby.sh'
+  'sudo kubectl -n gentoo-ruby exec ruby-builder-k3s-worker-1-0 -- runuser -u builder -- /opt/ruby-build/build-ruby'
 ```
 
 Gitea Actions jobs with a matching `gentoo` or worker-specific label can execute the same script.

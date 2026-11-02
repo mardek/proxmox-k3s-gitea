@@ -22,7 +22,7 @@ Alternatives considered:
 
 ## Files
 
-- `install-terraform-debian.sh`: root-run Debian 12 installer using HashiCorp's official APT repository; verifies `terraform version`.
+- `install-terraform-debian`: root-run Debian 12 installer using HashiCorp's official APT repository; verifies `terraform version`.
 - `01-vms/versions.tf`: Terraform and provider version constraints.
 - `01-vms/providers.tf`: Proxmox provider configuration using environment variables for credentials.
 - `01-vms/variables.tf`: Proxmox, VM, network, SSH, and Gitea-independent inputs.
@@ -30,9 +30,9 @@ Alternatives considered:
 - `01-vms/outputs.tf`: VM names, IDs, and addresses without exposing secrets.
 - `01-vms/terraform.tfvars.example`: editable non-secret environment values for the existing node names and addresses.
 - `01-vms/cloud-init/`: server and agent Cloud-Init templates.
-- `02-kubernetes/wait-for-cluster.sh`: checks node readiness and expected node count using `kubectl`.
+- `02-kubernetes/wait-for-cluster`: checks node readiness and expected node count using `kubectl`.
 - `03-gitea/values.yaml`: persistent Gitea configuration with explicitly configured Ingress disabled by default until a hostname is supplied.
-- `03-gitea/install.sh`: installs/upgrades the pinned Gitea chart with Helm, optionally accepting a hostname and settings overrides.
+- `03-gitea/install`: installs/upgrades the pinned Gitea chart with Helm, optionally accepting a hostname and settings overrides.
 
 ## Configuration and secrets
 

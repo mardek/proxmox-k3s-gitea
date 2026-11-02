@@ -34,7 +34,7 @@ ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
   "root@${proxmox_ssh_address}" 'echo SSH_OK'
 
 log "Preparing Terraform"
-"${script_dir}/01-vms/install-providers.sh"
+"${script_dir}/01-vms/install-providers"
 TF_CLI_CONFIG_FILE="${script_dir}/01-vms/.terraform-provider-mirror/terraform.rc" \
   terraform -chdir="${script_dir}/01-vms" init -input=false
 
