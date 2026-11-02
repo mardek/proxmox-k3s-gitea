@@ -126,7 +126,7 @@ The monitor displays recent K3s logs from the control plane and all workers, plu
 
 ## Design Docs
 
-- [Deployment and cluster architecture](docs/deployment-cluster-architecture.md) — VM topology, Gitea vs. Ruby workloads, Pod/PV/PVC storage, and network access diagrams
+- [Deployment and cluster architecture](docs/deployment-cluster-architecture.md)
 - [Proxmox-K3s-Gitea Design](docs/superpowers/specs/2026-10-26-proxmox-k3s-gitea-design.md)
 - [Longhorn RWX Design](docs/superpowers/specs/2026-10-26-longhorn-rwx-design.md)
 - [Implementation Plan](docs/superpowers/plans/2026-10-26-proxmox-k3s-gitea.md)
