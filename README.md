@@ -4,7 +4,16 @@ Homelab infrastructure-as-code: four Debian VMs on Proxmox, K3s bootstrapped via
 
 ## Architecture
 
-See the separate [deployment and cluster architecture](docs/deployment-cluster-architecture.md) page.
+```mermaid
+flowchart LR
+    Admin["Debian admin<br/>Terraform + deploy"] --> Proxmox["Proxmox<br/>4 Debian VMs"]
+    Proxmox --> Control["k3s-control<br/>192.168.2.100"]
+    Proxmox --> Workers["3 K3s workers<br/>192.168.2.101–103"]
+    Control --> Platform["Gitea · Longhorn<br/>Prometheus · Grafana"]
+    Workers --> Ruby["Gentoo Ruby builders<br/>Gitea Actions runners"]
+```
+
+See the separate [deployment and cluster architecture](docs/deployment-cluster-architecture.md) page for the detailed diagram.
 
 ### Applications and distributed storage
 
