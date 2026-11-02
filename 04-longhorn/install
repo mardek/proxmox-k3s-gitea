@@ -46,14 +46,20 @@ done < <(sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system get daem
 
 log "Waiting for every Longhorn Pod to become ready"
 deadline=$((SECONDS + 900))
+last_progress=0
 while true; do
   not_ready=$(sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system get pods --no-headers 2>/dev/null | \
     awk '$3 != "Completed" && $3 != "Succeeded" && $2 != "1/1" && $2 != "2/2" && $2 != "3/3" {print $1}')
   if [[ -z $not_ready ]]; then
+    printf '[OK] Every Longhorn Pod is ready\n'
     break
   fi
+  if (( SECONDS - last_progress >= 15 )); then
+    printf 'Still waiting for Longhorn Pods:\n%s\n' "$not_ready"
+    last_progress=$SECONDS
+  fi
   if (( SECONDS >= deadline )); then
-    printf 'Longhorn Pods not ready after 15 minutes:\n%s\n' "$not_ready" >&2
+    printf '[ERROR] Longhorn Pods not ready after 15 minutes:\n%s\n' "$not_ready" >&2
     exit 1
   fi
   sleep 10
