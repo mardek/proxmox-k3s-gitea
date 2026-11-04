@@ -36,7 +36,8 @@ sudo env KUBECONFIG="${KUBECONFIG}" helm repo update longhorn
 
 watch_longhorn_pods() {
   while true; do
-    printf '\n--- Longhorn pod status (%s) ---\n' "$(date -u +%H:%M:%S)"
+    printf '\n%b[INFO]%b Longhorn pod status (%s)\n' \
+      "$color_blue" "$color_reset" "$(date -u +%H:%M:%S)"
     sudo env KUBECONFIG="${KUBECONFIG}" kubectl -n longhorn-system get pods -o wide 2>/dev/null || true
     sleep 15
   done
@@ -88,4 +89,4 @@ sudo env KUBECONFIG="${KUBECONFIG}" kubectl patch storageclass longhorn \
 sudo env KUBECONFIG="${KUBECONFIG}" kubectl patch storageclass local-path \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 
-success "Longhorn installation complete"
+success "Longhorn is now installed on the cluster!"

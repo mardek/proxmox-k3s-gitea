@@ -126,18 +126,8 @@ control() {
 watch_compiler() {
   while true; do
     for worker in k3s-worker-1 k3s-worker-2 k3s-worker-3; do
-      if control "kubectl -n gentoo-ruby exec ruby-builder-${worker}-0 -- bash -c 'for process in /proc/[0-9]*/cmdline; do tr \"\\0\" \" \" < \"\$process\" 2>/dev/null | grep -Eq \"[e]merge|build-[r]uby|[m]ake( |$)|[c]c1( |$)|[g]cc( |$)|[c]lang( |$)\" && exit 0; done; exit 1'" >/dev/null 2>&1; then
-        success "Following compilation on $worker; press Ctrl+C to stop"
-        ssh -t "${ssh_options[@]}" "debian@${control_plane_address}" \
-          "sudo kubectl -n gentoo-ruby logs ruby-builder-${worker}-0 -f" | colorize_build_log
-        waiting "Log stream ended; reconnecting in $interval seconds"
-        sleep "$interval"
-        continue 2
-      fi
-    done
-    for worker in k3s-worker-1 k3s-worker-2 k3s-worker-3; do
       if control "kubectl -n gentoo-ruby exec ruby-builder-${worker}-0 -- printenv RUBY_BUILD_ON_START | grep -qx true" >/dev/null 2>&1; then
-        waiting "No active compilation; following selected builder $worker"
+        success "Following selected builder $worker; press Ctrl+C to stop"
         ssh -t "${ssh_options[@]}" "debian@${control_plane_address}" \
           "sudo kubectl -n gentoo-ruby logs ruby-builder-${worker}-0 -f" | colorize_build_log
         waiting "Log stream ended; reconnecting in $interval seconds"
@@ -145,7 +135,7 @@ watch_compiler() {
         continue 2
       fi
     done
-    waiting "No builder found; checking again in $interval seconds"
+    waiting "No selected builder found; checking again in $interval seconds"
     sleep "$interval"
   done
 }

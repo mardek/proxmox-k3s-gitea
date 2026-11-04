@@ -12,11 +12,11 @@ else
 fi
 
 log() {
-  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+  printf '\n%b[INFO]%b %s %s\n' "$color_blue" "$color_reset" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
 success() {
-  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+  printf '%b[OK]%b %s %s\n' "$color_green" "$color_reset" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
 build_id="$(date -u +%Y%m%dT%H%M%SZ)-${WORKER_NAME}"
@@ -102,10 +102,15 @@ main{{background:white;padding:30px}}table{{border-collapse:collapse;width:100%}
 (root / 'build-report.html').write_text(html)
 PY
 
-if [[ -n ${DASHBOARD_URL:-} ]]; then
-  curl -fsS -X PUT --data-binary @metrics.json "${DASHBOARD_URL}/metrics/${WORKER_NAME}.json"
-  curl -fsS -X PUT --data-binary @build-report.html "${DASHBOARD_URL}/reports/${WORKER_NAME}.html"
+dashboard_url=${DASHBOARD_URL:-http://ruby-build-dashboard:8080}
+if [[ $dashboard_url =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?/?$ ]]; then
+  log "Ignoring the Pod-local dashboard address $dashboard_url"
+  dashboard_url=http://ruby-build-dashboard:8080
 fi
+curl -fsS --retry 3 --retry-connrefused -X PUT \
+  --data-binary @metrics.json "${dashboard_url}/metrics/${WORKER_NAME}.json"
+curl -fsS --retry 3 --retry-connrefused -X PUT \
+  --data-binary @build-report.html "${dashboard_url}/reports/${WORKER_NAME}.html"
 
 if [[ -n ${GITEA_PUBLISH_TOKEN:-} && -n ${GITEA_REPOSITORY:-} ]]; then
   tag="ruby-${RUBY_VERSION}-${build_id}"

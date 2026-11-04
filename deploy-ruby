@@ -195,6 +195,10 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
   remote_dir=/tmp/ruby-build-deploy
   ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
   ssh-keygen -R "$control_plane_address" >/dev/null 2>&1 || true
+  log "Ensuring Chrony keeps time synchronized on the control plane"
+  ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+    'sudo sh -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq chrony && systemctl enable --now chrony"'
+  success "Chrony is installed and running on the control plane"
   for index in 1 2 3; do
     worker="k3s-worker-$index"
     worker_address=$(ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
@@ -204,6 +208,10 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       exit 1
     fi
     ssh-keygen -R "$worker_address" >/dev/null 2>&1 || true
+    log "Ensuring Chrony keeps time synchronized on $worker"
+    ssh "${ssh_options[@]}" "debian@${worker_address}" \
+      'sudo sh -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq chrony && systemctl enable --now chrony"'
+    success "Chrony is installed and running on $worker"
     if ssh "${ssh_options[@]}" "debian@${worker_address}" \
       'sudo test -s /var/lib/gitea-actions-runner/.runner'; then
       success "Gitea runner on $worker is already registered; skipping installation"

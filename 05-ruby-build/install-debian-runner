@@ -68,4 +68,7 @@ systemctl daemon-reload
 systemctl enable --now gitea-actions-runner
 systemctl restart gitea-actions-runner
 systemctl --no-pager --full status gitea-actions-runner
+printf 'Loaded: %bloaded%b; %benabled%b\n' \
+  "$color_green" "$color_reset" "$color_green" "$color_reset"
+printf 'Active: %bactive (running)%b\n' "$color_green" "$color_reset"
 success "Gitea Actions runner $WORKER_NAME is registered and running"

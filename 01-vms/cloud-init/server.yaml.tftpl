@@ -3,6 +3,7 @@ hostname: ${hostname}
 package_update: true
 packages:
   - curl
+  - chrony
   - qemu-guest-agent
   - open-iscsi
   - nfs-common
@@ -23,6 +24,7 @@ write_files:
       token: ${k3s_token}
       node-name: ${hostname}
 runcmd:
+  - [systemctl, enable, --now, chrony]
   - [systemctl, enable, --now, qemu-guest-agent]
   - [systemctl, enable, --now, iscsid]
   - [sh, -c, "for attempt in 1 2 3 4; do curl -sfL https://get.k3s.io | sh - && systemctl is-active --quiet k3s && exit 0; sleep 30; done; exit 1"]

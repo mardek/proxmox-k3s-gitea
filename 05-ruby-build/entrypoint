@@ -12,7 +12,7 @@ else
 fi
 
 log() {
-  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+  printf '\n%b[INFO]%b %s %s\n' "$color_blue" "$color_reset" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
 log "Synchronizing Portage"

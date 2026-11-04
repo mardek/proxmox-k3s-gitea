@@ -3,6 +3,7 @@ hostname: ${hostname}
 package_update: true
 packages:
   - curl
+  - chrony
   - qemu-guest-agent
   - open-iscsi
   - nfs-common
@@ -24,6 +25,7 @@ write_files:
       token: ${k3s_token}
       node-name: ${hostname}
 runcmd:
+  - [systemctl, enable, --now, chrony]
   - [systemctl, enable, --now, qemu-guest-agent]
   - [systemctl, enable, --now, iscsid]
   - [sh, -c, "for i in $(seq 1 60); do curl -kfs https://${server_address}:6443/ping && break; sleep 5; done; curl -kfs https://${server_address}:6443/ping"]

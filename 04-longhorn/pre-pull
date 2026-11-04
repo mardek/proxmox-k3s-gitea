@@ -22,8 +22,10 @@ ssh-keygen -R "$control_plane_address" >/dev/null 2>&1 || true
 node_addresses=$(ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo kubectl get nodes -o jsonpath='{range .items[*]}{.status.addresses[?(@.type==\"InternalIP\")].address}{\"\\n\"}{end}' | grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}'")
 
+pre_pull_pids=()
 while read -r node_address; do
   [[ -n $node_address ]] || continue
+  (
   log "Pre-pulling Longhorn images on $node_address"
   ssh-keygen -R "$node_address" >/dev/null 2>&1 || true
   ssh "${ssh_options[@]}" "debian@${node_address}" "sudo FORCE_COLOR='$force_color' bash -s" <<'EOF'
@@ -61,4 +63,17 @@ for image in "${images[@]}"; do
   fi
 done
 EOF
+  ) &
+  pre_pull_pids+=("$!")
 done <<< "$node_addresses"
+
+pre_pull_failed=false
+for pid in "${pre_pull_pids[@]}"; do
+  if ! wait "$pid"; then
+    pre_pull_failed=true
+  fi
+done
+if [[ $pre_pull_failed == true ]]; then
+  echo 'Longhorn image pre-pull failed on at least one node' >&2
+  exit 1
+fi

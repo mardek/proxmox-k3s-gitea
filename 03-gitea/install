@@ -2,12 +2,21 @@
 set -euo pipefail
 
 if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
   color_green=$'\033[1;32m'
   color_reset=$'\033[0m'
 else
+  color_blue=''
   color_green=''
   color_reset=''
 fi
+
+info() {
+  local line
+  while IFS= read -r line; do
+    printf '%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$line"
+  done <<< "$*"
+}
 
 success() {
   printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
@@ -31,10 +40,10 @@ if [[ -z ${GITEA_ADMIN_PASSWORD:-} ]]; then
   exit 1
 fi
 
-kubectl create namespace gitea --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n gitea create secret generic gitea-admin \
+info "$(kubectl create namespace gitea --dry-run=client -o yaml | kubectl apply -f -)"
+info "$(kubectl -n gitea create secret generic gitea-admin \
   --from-literal=admin-password="${GITEA_ADMIN_PASSWORD}" \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --dry-run=client -o yaml | kubectl apply -f -)"
 unset GITEA_ADMIN_PASSWORD
 
 for domain in registry-1.docker.io auth.docker.io production.cloudflare.docker.com production.cloudfront.docker.com; do
@@ -46,8 +55,8 @@ for domain in registry-1.docker.io auth.docker.io production.cloudflare.docker.c
   fi
 done
 
-helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
-helm repo update bitnami
+info "$(helm repo add bitnami https://charts.bitnami.com/bitnami --force-update 2>&1)"
+info "$(helm repo update bitnami 2>&1)"
 
 helm_args=(
   upgrade --install gitea bitnami/gitea

@@ -53,7 +53,8 @@ helm repo update prometheus-community
 
 watch_monitoring_pods() {
   while true; do
-    printf '\n--- Monitoring pod status (%s) ---\n' "$(date -u +%H:%M:%S)"
+    printf '\n%b[INFO]%b Monitoring pod status (%s)\n' \
+      "$color_blue" "$color_reset" "$(date -u +%H:%M:%S)"
     kubectl -n monitoring get pods -o wide 2>&1 || true
     sleep 15
   done
