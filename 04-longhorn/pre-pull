@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+force_color=${FORCE_COLOR:-false}
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  force_color=true
+  color_blue=$'\033[1;34m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
 control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
 ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 ssh-keygen -R "$control_plane_address" >/dev/null 2>&1 || true
@@ -10,10 +24,20 @@ node_addresses=$(ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
 
 while read -r node_address; do
   [[ -n $node_address ]] || continue
-  printf '\n==> Pre-pulling Longhorn images on %s\n' "$node_address"
+  log "Pre-pulling Longhorn images on $node_address"
   ssh-keygen -R "$node_address" >/dev/null 2>&1 || true
-  ssh "${ssh_options[@]}" "debian@${node_address}" 'sudo bash -s' <<'EOF'
+  ssh "${ssh_options[@]}" "debian@${node_address}" "sudo FORCE_COLOR='$force_color' bash -s" <<'EOF'
 set -euo pipefail
+
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_green=$'\033[1;32m'
+  color_yellow=$'\033[1;33m'
+  color_reset=$'\033[0m'
+else
+  color_green=''
+  color_yellow=''
+  color_reset=''
+fi
 
 images=(
   docker.io/longhornio/longhorn-manager:v1.13.0
@@ -30,9 +54,9 @@ images=(
 
 for image in "${images[@]}"; do
   if crictl inspecti "$image" >/dev/null 2>&1; then
-    printf 'Already present: %s\n' "$image"
+    printf '%b[OK]%b Already present: %s\n' "$color_green" "$color_reset" "$image"
   else
-    printf 'Pulling: %s\n' "$image"
+    printf '%b[PULL]%b Pulling: %s\n' "$color_yellow" "$color_reset" "$image"
     crictl pull "$image"
   fi
 done

@@ -1,6 +1,34 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+force_color=false
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  force_color=true
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_yellow=$'\033[1;33m'
+  color_red=$'\033[1;31m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_yellow=''
+  color_red=''
+  color_reset=''
+fi
+
+section() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
+warning() {
+  printf '%b[WARN]%b %s\n' "$color_yellow" "$color_reset" "$*"
+}
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
 proxmox_ssh_address=${PROXMOX_SSH_ADDRESS:-192.168.2.22}
@@ -17,10 +45,6 @@ archive=/tmp/k3s-diagnostics-$(date -u +%Y%m%dT%H%M%SZ).zip
 report_file=$report_dir/diagnostics.txt
 
 collect_diagnostics() {
-section() {
-  printf '\n==> %s\n' "$*"
-}
-
 refresh_host_key() {
   local address=$1
   ssh-keygen -R "$address" >/dev/null 2>&1 || true
@@ -28,8 +52,11 @@ refresh_host_key() {
 }
 
 run() {
-  if ! "$@"; then
-    echo "[FAILED] $*" >&2
+  "$@"
+  local return_code=$?
+  if ((return_code != 0)); then
+    printf '%b[FAILED]%b Return code %d: %s\n' \
+      "$color_red" "$color_reset" "$return_code" "$*" >&2
     failures=$((failures + 1))
   fi
 }
@@ -116,16 +143,22 @@ control 'kubectl -n gitea logs statefulset/gitea-postgresql --tail=50'
 
 section "Diagnostic summary"
 if (( failures > 0 )); then
-  echo "${failures} check(s) failed; review the [FAILED] lines above." >&2
+  printf '%b[ERROR]%b %d check(s) failed; review the [FAILED] lines above\n' \
+    "$color_red" "$color_reset" "$failures" >&2
   exit 1
 fi
 
-echo "All diagnostic checks completed without command failures."
+success "All diagnostic checks completed without command failures"
 }
 
-collect_diagnostics 2>&1 | tee "$report_file"
+FORCE_COLOR="$force_color" collect_diagnostics 2>&1 | tee "$report_file"
 diagnostic_status=${PIPESTATUS[0]}
 zip -j -q "$archive" "$report_file"
 rm -rf "$report_dir"
-printf '\nDiagnostic archive: %s\n' "$archive"
+if ((diagnostic_status == 0)); then
+  success "Diagnostic archive created: $archive"
+else
+  printf '%b[ERROR]%b Diagnostics failed with return code %d; archive: %s\n' \
+    "$color_red" "$color_reset" "$diagnostic_status" "$archive" >&2
+fi
 exit "$diagnostic_status"

@@ -51,7 +51,7 @@ export ACT_RUNNER_SHA256='be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a
 export GENTOO_IMAGE='gentoo/stage3:latest'
 ```
 
-Open the dashboard at `http://192.168.2.100:30080`. It refreshes every 30 seconds. A worker appears only after its complete build and test run succeeds; there are no partial metrics while compilation is running. Deployment installs and starts the Debian worker services before creating the Gentoo Pods, then waits for all three worker names to report a non-offline status. Each Pod waits for its Debian worker runner before starting an initial build. Inspect a host runner with `systemctl status gitea-actions-runner` or `journalctl -u gitea-actions-runner` on the worker VM.
+Open the dashboard at `http://192.168.2.100:30080`. It refreshes every 30 seconds. A worker appears only after its complete build and test run succeeds; there are no partial metrics while compilation is running. Deployment installs and starts the Debian worker services on unregistered workers before creating the Gentoo Pods; workers with saved registration are skipped. Inspect a host runner with `systemctl status gitea-actions-runner` or `journalctl -u gitea-actions-runner` on the worker VM.
 
 ## Inspect builds
 

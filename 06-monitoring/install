@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 if [[ -z ${KUBECONFIG:-} && -f /etc/rancher/k3s/k3s.yaml ]]; then
@@ -26,7 +44,7 @@ kubectl -n monitoring create secret generic grafana-admin \
   --dry-run=client -o yaml | kubectl apply -f -
 unset GRAFANA_ADMIN_PASSWORD
 
-printf '\n==> Installing Prometheus for historical metrics and Grafana for dashboards\n'
+log 'Installing Prometheus for historical metrics and Grafana for dashboards'
 printf 'Prometheus retention: 15 days; storage: 5 Gi on Longhorn\n'
 printf 'Grafana will listen on NodePort 30090\n'
 
@@ -44,7 +62,7 @@ watch_monitoring_pods() {
 watch_monitoring_pods &
 watcher_pid=$!
 trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
-printf '\n==> Downloading the chart and creating monitoring resources\n'
+log 'Downloading the chart and creating monitoring resources'
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --version "${MONITORING_CHART_VERSION:-92.3.1}" \
   --namespace monitoring \
@@ -54,12 +72,13 @@ kill "$watcher_pid" 2>/dev/null || true
 wait "$watcher_pid" 2>/dev/null || true
 trap - EXIT
 
-printf '\n==> Waiting for every monitoring Pod to become ready\n'
+log 'Waiting for every monitoring Pod to become ready'
 deadline=$((SECONDS + 900))
 while true; do
   not_ready=$(kubectl -n monitoring get pods --no-headers 2>/dev/null | \
     awk '$3 != "Completed" && $3 != "Succeeded" {split($2, ready, "/"); if (ready[1] != ready[2]) print $1}')
   if [[ -z $not_ready ]]; then
+    success 'Every monitoring Pod is ready'
     break
   fi
   if (( SECONDS >= deadline )); then
@@ -69,6 +88,6 @@ while true; do
   sleep 10
 done
 
-printf '\n==> Prometheus and Grafana installation complete\n'
+success 'Prometheus and Grafana installation complete'
 kubectl -n monitoring get pods,pvc,svc -o wide
 printf '\nGrafana: http://%s:30090 (user: admin)\n' "${CONTROL_PLANE_ADDRESS:-192.168.2.100}"

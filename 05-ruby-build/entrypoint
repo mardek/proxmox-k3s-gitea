@@ -3,8 +3,16 @@ set -euo pipefail
 
 export MAKEOPTS=${MAKEOPTS:--j2}
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_reset=''
+fi
+
 log() {
-  printf '\n==> %s\n' "$*"
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
 }
 
 log "Synchronizing Portage"
@@ -39,16 +47,6 @@ emerge --noreplace \
   sys-libs/readline \
   sys-libs/zlib \
   sys-process/time
-
-gitea_runners_url="${GITEA_URL%/}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners"
-authorization_header="Authorization: token ${GITEA_PUBLISH_TOKEN}"
-
-log "Waiting for the Debian worker runner $WORKER_NAME to report online"
-until runners_response=$(curl -fsS -H "$authorization_header" "${gitea_runners_url}?limit=100") && \
-  jq -e --arg name "$WORKER_NAME" \
-    '.entries[]? | select(.name == $name and .status != null and .status != "offline")' <<<"$runners_response" >/dev/null; do
-  sleep 5
-done
 
 if [[ ${RUBY_BUILD_ON_START:-true} == true ]]; then
   log "Starting the initial Ruby build"

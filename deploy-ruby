@@ -1,6 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+force_color=false
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  force_color=true
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_yellow=$'\033[1;33m'
+  color_red=$'\033[1;31m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_yellow=''
+  color_red=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
+waiting() {
+  printf '%b[WAIT]%b %s\n' "$color_yellow" "$color_reset" "$*"
+}
+
+on_exit() {
+  local return_code=$?
+  if ((return_code != 0)); then
+    printf '%b[ERROR]%b Ruby deployment failed with return code %d at line %s\n' \
+      "$color_red" "$color_reset" "$return_code" "${BASH_LINENO[0]:-unknown}" >&2
+  fi
+}
+trap on_exit EXIT
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 namespace=gentoo-ruby
 workers=(k3s-worker-1 k3s-worker-2 k3s-worker-3)
@@ -71,7 +108,7 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       echo 'Automatic repository creation currently supports the admin owner only' >&2
       exit 1
     fi
-    printf '\n==> Ensuring Gitea repository %s exists\n' "$GITEA_REPOSITORY"
+    log "Ensuring Gitea repository $GITEA_REPOSITORY exists"
     repo_status=$(curl -sS -o /dev/null -w '%{http_code}' -u "admin:${GITEA_ADMIN_PASSWORD}" \
       -H 'Content-Type: application/json' \
       -d "{\"name\":\"${gitea_name}\",\"private\":false,\"auto_init\":true}" \
@@ -80,8 +117,9 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       echo "Could not create or find $GITEA_REPOSITORY (HTTP $repo_status); check Gitea access with ./run start" >&2
       exit 1
     fi
+    success "Gitea repository $GITEA_REPOSITORY is available (HTTP $repo_status)"
     if [[ -z ${GITEA_PUBLISH_TOKEN:-} ]]; then
-      echo 'Creating the Gitea release publishing token'
+      log 'Creating the Gitea release publishing token'
       response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
         -H 'Content-Type: application/json' \
         -d '{"name":"ruby-release-publisher","scopes":["write:repository"]}' \
@@ -89,7 +127,7 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       GITEA_PUBLISH_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha1"])' <<<"$response")
       export GITEA_PUBLISH_TOKEN
     fi
-    echo 'Fetching a fresh Gitea Actions runner registration token'
+    log 'Fetching a fresh Gitea Actions runner registration token'
     response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
       "${gitea_api_url}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners/registration-token")
     GITEA_RUNNER_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' <<<"$response")
@@ -165,8 +203,13 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       echo "Could not discover the InternalIP for $worker" >&2
       exit 1
     fi
-    printf '\n==> Installing the Gitea runner on Debian worker %s (%s)\n' "$worker" "$worker_address"
     ssh-keygen -R "$worker_address" >/dev/null 2>&1 || true
+    if ssh "${ssh_options[@]}" "debian@${worker_address}" \
+      'sudo test -s /var/lib/gitea-actions-runner/.runner'; then
+      success "Gitea runner on $worker is already registered; skipping installation"
+      continue
+    fi
+    log "Installing the Gitea runner on Debian worker $worker ($worker_address)"
     scp -q "${ssh_options[@]}" "${script_dir}/05-ruby-build/install-debian-runner" \
       "debian@${worker_address}:/tmp/install-debian-runner"
     {
@@ -176,8 +219,10 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       printf 'export GITEA_REPOSITORY=%q\n' "$GITEA_REPOSITORY"
       printf 'export ACT_RUNNER_VERSION=%q\n' "${ACT_RUNNER_VERSION:-0.2.12}"
       printf 'export ACT_RUNNER_SHA256=%q\n' "${ACT_RUNNER_SHA256:-be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a22e34ba11e}"
+      printf 'export FORCE_COLOR=%q\n' "$force_color"
       printf 'bash /tmp/install-debian-runner\n'
     } | ssh "${ssh_options[@]}" "debian@${worker_address}" 'sudo bash -s'
+    success "Gitea runner installed on $worker"
   done
   for command_name in ssh scp; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -200,6 +245,7 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
     printf 'export ACT_RUNNER_VERSION=%q\n' "${ACT_RUNNER_VERSION:-0.2.12}"
     printf 'export ACT_RUNNER_SHA256=%q\n' "${ACT_RUNNER_SHA256:-be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a22e34ba11e}"
     printf 'export RUBY_VERSION=%q\n' "${RUBY_VERSION:-3.4.11}"
+    printf 'export FORCE_COLOR=%q\n' "$force_color"
     printf 'RUBY_DEPLOY_REMOTE=true bash %q\n' "${remote_dir}/deploy-ruby"
   } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
   exit
@@ -211,10 +257,6 @@ for command_name in kubectl curl; do
     exit 1
   fi
 done
-
-log() {
-  printf '\n==> %s\n' "$*"
-}
 
 log "Creating the Ruby build namespace and dashboard"
 kubectl apply -f "${script_dir}/05-ruby-build/dashboard.yaml"
@@ -234,7 +276,7 @@ kubectl -n "$namespace" create secret generic gitea-runner-credentials \
   --dry-run=client -o yaml | kubectl apply -f -
 
 build_worker=${RUBY_BUILD_WORKER:-${workers[RANDOM % ${#workers[@]}]}}
-log "Initial Ruby build selected on $build_worker; it will start after that runner is online"
+log "Initial Ruby build selected on $build_worker"
 for worker in "${workers[@]}"; do
   log "Deploying Gentoo builder on $worker"
   build_on_start=false
@@ -252,39 +294,19 @@ for worker in "${workers[@]}"; do
   kubectl -n "$namespace" rollout restart "statefulset/ruby-builder-$worker"
 done
 
-log "Waiting for every Gitea runner to register and report online"
-deadline=$((SECONDS + 1800))
-while true; do
-  offline_runners=()
-  for worker in "${workers[@]}"; do
-    if ! kubectl -n "$namespace" exec "ruby-builder-$worker-0" -- sh -c \
-      'curl -fsS -H "Authorization: token ${GITEA_PUBLISH_TOKEN}" "${GITEA_URL%/}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners?limit=100" | jq -e --arg name "$WORKER_NAME" '\''.entries[]? | select(.name == $name and .status != null and .status != "offline")'\'' >/dev/null' \
-      >/dev/null 2>&1; then
-      offline_runners+=("$worker")
-    fi
-  done
-  if ((${#offline_runners[@]} == 0)); then
-    break
-  fi
-  printf 'Still waiting for Gitea runners:\n'
-  printf '%s\n' "${offline_runners[@]}"
-  if ((SECONDS >= deadline)); then
-    echo "Timed out waiting for all three Gitea runners to come online" >&2
-    exit 1
-  fi
-  sleep 10
-done
-
-log "Waiting for the dashboard"
+waiting "Waiting for the dashboard"
 kubectl -n "$namespace" rollout status deployment/ruby-build-dashboard --timeout=5m
+success "Ruby build dashboard is ready"
 for worker in "${workers[@]}"; do
-  log "Waiting for $worker; Gentoo dependency installation can take time"
+  waiting "Waiting for $worker; Gentoo dependency installation can take time"
   kubectl -n "$namespace" rollout status "statefulset/ruby-builder-$worker" --timeout=30m
+  success "Builder $worker is ready"
 done
 
+success "Ruby builders deployed successfully"
 cat <<EOF
 
-All three Gitea runners are online. Initial builds continue inside the Pods.
+Ruby builders are running. Initial builds continue inside the Pods.
 
 Dashboard: http://${control_plane_address}:30080
 Pod status: kubectl -n $namespace get pods -o wide

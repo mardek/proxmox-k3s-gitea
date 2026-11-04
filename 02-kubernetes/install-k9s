@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_green=''
+  color_reset=''
+fi
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
 if [[ ${EUID} -ne 0 ]]; then
   echo "Run as root" >&2
   exit 1
@@ -14,7 +26,7 @@ version=0.51.0
 if command -v k9s >/dev/null 2>&1; then
   current_version=$(k9s version 2>/dev/null || true)
   if [[ $current_version == *"v${version}"* ]]; then
-    echo "K9s ${version} is already installed"
+    success "K9s ${version} is already installed"
     exit 0
   fi
 fi
@@ -36,4 +48,5 @@ install -d -m 0700 /root/.kube
 if [[ ! -e /root/.kube/config ]]; then
   ln -s /etc/rancher/k3s/k3s.yaml /root/.kube/config
 fi
+success "K9s ${version} installed successfully"
 k9s version

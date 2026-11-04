@@ -1,6 +1,24 @@
 #!/bin/bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
 build_id="$(date -u +%Y%m%dT%H%M%SZ)-${WORKER_NAME}"
 work_dir="/data/builds/$build_id"
 mkdir -p "$work_dir"
@@ -11,7 +29,7 @@ archive="ruby-${RUBY_VERSION}.tar.xz"
 source_dir="ruby-${RUBY_VERSION}"
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-printf '\n==> Building Ruby %s on %s\n' "$RUBY_VERSION" "$WORKER_NAME"
+log "Building Ruby $RUBY_VERSION on $WORKER_NAME"
 /usr/bin/time -v -o download.time \
   curl -fL --retry 4 "https://cache.ruby-lang.org/pub/ruby/${series}/${archive}" -o "$archive"
 tar -xf "$archive"
@@ -114,4 +132,4 @@ PY
   done
 fi
 
-printf '\n==> Build %s completed successfully\n' "$build_id"
+success "Build $build_id completed successfully"

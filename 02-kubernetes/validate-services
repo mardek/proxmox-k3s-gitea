@@ -2,18 +2,20 @@
 set -euo pipefail
 
 export KUBECONFIG=${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}
-if [[ -t 1 ]]; then
-  green=$'\033[32m'
-  red=$'\033[31m'
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  blue=$'\033[1;34m'
+  green=$'\033[1;32m'
+  yellow=$'\033[1;33m'
+  red=$'\033[1;31m'
   reset=$'\033[0m'
 else
-  green='' red='' reset=''
+  blue='' green='' yellow='' red='' reset=''
 fi
-trap 'printf "\n%b[ERROR]%b Core service validation failed at line %s\n" "$red" "$reset" "$LINENO" >&2' ERR
+trap 'return_code=$?; printf "\n%b[ERROR]%b Core service validation failed with return code %d at line %s\n" "$red" "$reset" "$return_code" "$LINENO" >&2' ERR
 
 validate_release() {
   local namespace=$1 release=$2
-  printf 'Checking Helm release %s/%s\n' "$namespace" "$release"
+  printf '%b[CHECK]%b Helm release %s/%s\n' "$blue" "$reset" "$namespace" "$release"
   if ! helm status "$release" -n "$namespace" >/dev/null; then
     printf '%b[ERROR]%b Helm release %s/%s is not deployed\n' "$red" "$reset" "$namespace" "$release" >&2
     return 1
@@ -23,7 +25,7 @@ validate_release() {
 
 wait_for_pods() {
   local namespace=$1 deadline not_ready
-  printf 'Waiting for Pods in namespace %s\n' "$namespace"
+  printf '%b[WAIT]%b Pods in namespace %s\n' "$yellow" "$reset" "$namespace"
   deadline=$((SECONDS + 900))
   while true; do
     not_ready=$(kubectl -n "$namespace" get pods --no-headers 2>/dev/null | \
@@ -68,4 +70,4 @@ for service in \
   printf '%b[OK]%b Service %s/%s exists\n' "$green" "$reset" "$namespace" "$name"
 done
 
-printf '\n%b[SUCCESS]%b Longhorn, Prometheus, Grafana, and Gitea are installed and ready\n' "$green" "$reset"
+printf '\n%b[OK]%b Longhorn, Prometheus, Grafana, and Gitea are installed and ready\n' "$green" "$reset"

@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_green=''
+  color_reset=''
+fi
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 if [[ -z ${KUBECONFIG:-} && -f /etc/rancher/k3s/k3s.yaml ]]; then
@@ -55,4 +67,5 @@ if [[ -n ${GITEA_HOST:-} ]]; then
 fi
 
 helm "${helm_args[@]}"
+success 'Gitea Helm release is installed and ready'
 kubectl -n gitea get pods,pvc,ingress

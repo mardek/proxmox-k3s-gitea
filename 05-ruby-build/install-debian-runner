@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_green=''
+  color_reset=''
+fi
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y ca-certificates curl jq
@@ -56,3 +68,4 @@ systemctl daemon-reload
 systemctl enable --now gitea-actions-runner
 systemctl restart gitea-actions-runner
 systemctl --no-pager --full status gitea-actions-runner
+success "Gitea Actions runner $WORKER_NAME is registered and running"

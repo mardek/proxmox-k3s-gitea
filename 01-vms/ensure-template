@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_reset=''
+fi
+
 proxmox_ssh_address=${PROXMOX_SSH_ADDRESS:?Set PROXMOX_SSH_ADDRESS}
 template_vm_id=${TEMPLATE_VM_ID:-9000}
 datastore_id=${DATASTORE_ID:-local-lvm}
@@ -9,11 +19,12 @@ image_url=${DEBIAN_CLOUD_IMAGE_URL:-https://cloud.debian.org/images/cloud/bookwo
 ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
 if ssh "${ssh_options[@]}" "root@${proxmox_ssh_address}" "qm status '$template_vm_id'" >/dev/null 2>&1; then
-  echo "Template $template_vm_id already exists"
+  printf '%b[OK]%b Template %s already exists\n' "$color_green" "$color_reset" "$template_vm_id"
   exit 0
 fi
 
-printf 'Creating Debian 12 Cloud-Init template %s\n' "$template_vm_id"
+printf '%b[INFO]%b Creating Debian 12 Cloud-Init template %s\n' \
+  "$color_blue" "$color_reset" "$template_vm_id"
 ssh "${ssh_options[@]}" "root@${proxmox_ssh_address}" \
   "TEMPLATE_VM_ID='$template_vm_id' DATASTORE_ID='$datastore_id' NETWORK_BRIDGE='$network_bridge' IMAGE_URL='$image_url' bash -s" <<'REMOTE'
 set -euo pipefail
@@ -28,3 +39,5 @@ qm set "$TEMPLATE_VM_ID" --boot c --bootdisk scsi0 --ipconfig0 ip=dhcp
 qm set "$TEMPLATE_VM_ID" --serial0 socket --vga serial0 --agent enabled=1
 qm template "$TEMPLATE_VM_ID"
 REMOTE
+printf '%b[OK]%b Debian 12 Cloud-Init template %s is ready\n' \
+  "$color_green" "$color_reset" "$template_vm_id"

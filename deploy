@@ -1,6 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+force_color=false
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  force_color=true
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_yellow=$'\033[1;33m'
+  color_red=$'\033[1;31m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_yellow=''
+  color_red=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
+waiting() {
+  printf '%b[WAIT]%b %s\n' "$color_yellow" "$color_reset" "$*"
+}
+
+warning() {
+  printf '%b[WARN]%b %s\n' "$color_yellow" "$color_reset" "$*"
+}
+
+on_exit() {
+  local return_code=$?
+  if ((return_code != 0)); then
+    printf '%b[ERROR]%b Deployment failed with return code %d at line %s\n' \
+      "$color_red" "$color_reset" "$return_code" "${BASH_LINENO[0]:-unknown}" >&2
+  fi
+}
+trap on_exit EXIT
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 config_file=${PROXMOX_DEPLOY_CONFIG:-${script_dir}/.proxmox-env}
 reconfigure=false
@@ -106,10 +147,6 @@ control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
 remote_dir=/tmp/k3s-gitea-deploy
 ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
-log() {
-  printf '\n==> %s\n' "$*"
-}
-
 refresh_host_key() {
   local address=$1
   ssh-keygen -R "$address" >/dev/null 2>&1 || true
@@ -156,7 +193,7 @@ fi
 eval "$(ssh-agent -s)" >/dev/null
 ssh-add "$ssh_private_key"
 ssh-add -L >/dev/null
-printf 'Using SSH key %s for Proxmox access\n' "$ssh_private_key"
+log "Using SSH key $ssh_private_key for Proxmox access"
 refresh_host_key "$proxmox_ssh_address"
 ssh "${ssh_options[@]}" "root@${proxmox_ssh_address}" 'echo SSH_OK'
 
@@ -167,23 +204,24 @@ log "Creating or updating the four Proxmox VMs"
 terraform -chdir="${script_dir}/01-vms" init -input=false
 terraform -chdir="${script_dir}/01-vms" apply -auto-approve -input=false
 
-log "Waiting for K3s on ${control_plane_address}"
+waiting "Waiting for K3s on ${control_plane_address}"
 refresh_host_key "$control_plane_address"
 deadline=$((SECONDS + 600))
 last_progress=0
 until ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   'sudo test -s /etc/rancher/k3s/k3s.yaml' 2>/dev/null; do
   if (( SECONDS - last_progress >= 15 )); then
-    printf 'K3s is not ready on %s; waiting for SSH and /etc/rancher/k3s/k3s.yaml\n' "$control_plane_address"
+    waiting "K3s is not ready on $control_plane_address; waiting for SSH and /etc/rancher/k3s/k3s.yaml"
     last_progress=$SECONDS
   fi
   if (( SECONDS >= deadline )); then
-    printf '[ERROR] Timed out after 600 seconds waiting for K3s on %s\n' "$control_plane_address" >&2
+    printf '%b[ERROR]%b Timed out after 600 seconds waiting for K3s on %s\n' \
+      "$color_red" "$color_reset" "$control_plane_address" >&2
     exit 1
   fi
   sleep 10
 done
-printf '[OK] K3s is running and its kubeconfig is available on %s\n' "$control_plane_address"
+success "K3s is running and its kubeconfig is available on $control_plane_address"
 
 log "Copying deployment scripts to the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
@@ -199,51 +237,54 @@ scp -q "${ssh_options[@]}" "${script_dir}/06-monitoring/install" "${script_dir}/
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "chmod +x '${remote_dir}/02-kubernetes/'* '${remote_dir}/03-gitea/install' '${remote_dir}/04-longhorn/'* '${remote_dir}/06-monitoring/install'"
 
-log "Waiting for all four Kubernetes nodes to become Ready"
+waiting "Waiting for all four Kubernetes nodes to become Ready"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/wait-for-cluster' 4 600"
+  "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/wait-for-cluster' 4 600"
 
 log "Checking Helm on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/install-helm'"
+  "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/install-helm'"
 
 log "Checking K9s on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/install-k9s'"
+  "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/install-k9s'"
 
 if [[ $check_updates == true ]]; then
   log "Checking for Helm and K9s updates"
   ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-    "sudo '${remote_dir}/02-kubernetes/check-tool-updates'" || \
-    echo 'Update check unavailable; continuing with installed versions'
+    "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/check-tool-updates'" || \
+    warning 'Update check unavailable; continuing with installed versions'
 fi
 
 log "Pre-pulling Longhorn images on every Kubernetes node"
-CONTROL_PLANE_ADDRESS="$control_plane_address" "${script_dir}/04-longhorn/pre-pull"
+FORCE_COLOR="$force_color" CONTROL_PLANE_ADDRESS="$control_plane_address" "${script_dir}/04-longhorn/pre-pull"
 
 log "Installing Longhorn distributed storage"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/04-longhorn/install'"
+  "sudo FORCE_COLOR='$force_color' '${remote_dir}/04-longhorn/install'"
 
 log "Installing Prometheus and Grafana"
 {
   printf 'export GRAFANA_ADMIN_PASSWORD=%q\n' "${GRAFANA_ADMIN_PASSWORD:-$GITEA_ADMIN_PASSWORD}"
   printf 'export CONTROL_PLANE_ADDRESS=%q\n' "$control_plane_address"
+  printf 'export FORCE_COLOR=%q\n' "$force_color"
   printf "'%s/06-monitoring/install'\n" "$remote_dir"
 } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
 
 log "Installing or upgrading Gitea with Helm"
 {
   printf 'export GITEA_ADMIN_PASSWORD=%q\n' "$GITEA_ADMIN_PASSWORD"
+  printf 'export FORCE_COLOR=%q\n' "$force_color"
   printf 'export GITEA_HOST=%q\n' "${GITEA_HOST:-}"
   printf "'%s/03-gitea/install'\n" "$remote_dir"
 } | ssh "${ssh_options[@]}" "debian@${control_plane_address}" 'sudo bash -s'
 
 log "Validating all core services"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-  "sudo '${remote_dir}/02-kubernetes/validate-services'"
+  "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/validate-services'"
+success "All core services passed validation"
 
 log "Starting service access"
 SKIP_RUBY_DASHBOARD=true "${script_dir}/run" start
 
-log "Deployment completed successfully"
+success "Deployment completed successfully"

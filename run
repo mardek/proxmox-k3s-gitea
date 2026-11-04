@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_green=$'\033[1;32m'
+  color_yellow=$'\033[1;33m'
+  color_red=$'\033[1;31m'
+  color_reset=$'\033[0m'
+else
+  color_green=''
+  color_yellow=''
+  color_red=''
+  color_reset=''
+fi
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
+warning() {
+  printf '%b[WARN]%b %s\n' "$color_yellow" "$color_reset" "$*"
+}
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 if [[ -f ${script_dir}/.proxmox-env ]]; then
   # shellcheck source=/dev/null
@@ -70,12 +90,12 @@ start_forward() {
   local name=$1 namespace=$2 service=$3 ports=$4 unit
   unit=$(unit_name "$name")
   if forward_running "$name"; then
-    printf '%s access is already running.\n' "$name"
+    success "$name access is already running"
     return
   fi
   ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
     "sudo systemctl restart '$unit' 2>/dev/null || sudo systemd-run --unit='$unit' --property=Restart=always --property=RestartSec=5 --description='K3s $name access' env KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n '$namespace' port-forward '$service' '$ports' --address 0.0.0.0"
-  printf 'Started %s access.\n' "$name"
+  success "Started $name access"
 }
 
 stop_forward() {
@@ -84,15 +104,15 @@ stop_forward() {
     ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
       "sudo systemctl stop $(unit_name "$name")"
   fi
-  printf '%s access stopped.\n' "$name"
+  success "$name access stopped"
 }
 
 status_forward() {
   local name=$1 port=$2
   if forward_running "$name"; then
-    printf '%s: running — http://%s:%s\n' "$name" "$control_plane_address" "$port"
+    success "$name: running — http://$control_plane_address:$port"
   else
-    printf '%s: stopped\n' "$name"
+    warning "$name: stopped"
     return 1
   fi
 }
@@ -103,7 +123,7 @@ docs_running() {
 
 start_docs() {
   if docs_running; then
-    echo 'Documentation index is already running.'
+    success 'Documentation index is already running'
     return
   fi
   mkdir -p "$state_dir/www"
@@ -129,7 +149,7 @@ start_docs() {
     printf 'Documentation server failed to start. See %s/docs.log\n' "$state_dir" >&2
     return 1
   fi
-  printf 'Started documentation index (PID %s).\n' "$(<"$state_dir/docs.pid")"
+  success "Started documentation index (PID $(<"$state_dir/docs.pid"))"
 }
 
 stop_docs() {
@@ -137,7 +157,7 @@ stop_docs() {
     kill "$(<"$state_dir/docs.pid")"
   fi
   rm -f "$state_dir/docs.pid"
-  echo 'Documentation index stopped.'
+  success 'Documentation index stopped'
 }
 
 start() {
@@ -164,9 +184,9 @@ stop() {
 status() {
   local result=0
   if docs_running; then
-    printf 'main access: running — http://%s:%s\n' "$docs_host" "$docs_port"
+    success "main access: running — http://$docs_host:$docs_port"
   else
-    echo 'main access: stopped'
+    warning 'main access: stopped'
     result=1
   fi
   status_forward gitea "$gitea_port" || result=1

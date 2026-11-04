@@ -1,16 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_yellow=$'\033[1;33m'
+  color_red=$'\033[1;31m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_yellow=''
+  color_red=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
+warning() {
+  printf '%b[WARN]%b %s\n' "$color_yellow" "$color_reset" "$*"
+}
+
+on_exit() {
+  local return_code=$?
+  if ((return_code != 0)); then
+    printf '%b[ERROR]%b Destruction failed with return code %d at line %s\n' \
+      "$color_red" "$color_reset" "$return_code" "${BASH_LINENO[0]:-unknown}" >&2
+  fi
+}
+trap on_exit EXIT
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 if [[ -f "${script_dir}/.proxmox-env" ]]; then
   source "${script_dir}/.proxmox-env"
 fi
 
 proxmox_ssh_address=${PROXMOX_SSH_ADDRESS:-192.168.2.22}
-
-log() {
-  printf '\n==> %s\n' "$*"
-}
 
 log "Checking destruction prerequisites"
 for command_name in terraform curl dpkg ssh ssh-agent ssh-add ssh-keygen; do
@@ -38,9 +69,10 @@ log "Preparing Terraform"
 TF_CLI_CONFIG_FILE="${script_dir}/01-vms/.terraform-provider-mirror/terraform.rc" \
   terraform -chdir="${script_dir}/01-vms" init -input=false
 
-log "The next step will permanently delete all managed VMs, snippets, and local data"
-log "Review the destruction plan and type yes only if you intend to erase the environment"
+warning "The next step will permanently delete all managed VMs, snippets, and local data"
+warning "Review the destruction plan and type yes only if you intend to erase the environment"
 terraform -chdir="${script_dir}/01-vms" destroy -input=false
+success "Terraform-managed VMs and data destroyed"
 
 log "Removing Ruby deployment variables"
 rm -f "${script_dir}/.ruby-build.env"
@@ -50,4 +82,4 @@ for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
   rm -f "${rc_file}.bak"
 done
 
-log "Terraform-managed environment destroyed"
+success "Terraform-managed environment destroyed"

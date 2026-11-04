@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_green=''
+  color_reset=''
+fi
+
+success() {
+  printf '%b[OK]%b %s\n' "$color_green" "$color_reset" "$*"
+}
+
 if [[ ${EUID} -ne 0 ]]; then
   echo "Run as root" >&2
   exit 1
@@ -14,7 +26,7 @@ version=3.19.0
 if command -v helm >/dev/null 2>&1; then
   current_version=$(helm version --short 2>/dev/null || true)
   if [[ $current_version == "v${version}" || $current_version == "v${version}+"* ]]; then
-    echo "Helm ${version} is already installed"
+    success "Helm ${version} is already installed"
     exit 0
   fi
 fi
@@ -28,4 +40,5 @@ curl -fsSL "https://get.helm.sh/${asset}" -o "${work_dir}/${asset}"
 echo "${expected_checksum}  ${work_dir}/${asset}" | sha256sum -c -
 tar -xzf "${work_dir}/${asset}" -C "$work_dir" linux-amd64/helm
 install -m 0755 "${work_dir}/linux-amd64/helm" /usr/local/bin/helm
+success "Helm ${version} installed successfully"
 helm version --short

@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
+  color_blue=$'\033[1;34m'
+  color_green=$'\033[1;32m'
+  color_reset=$'\033[0m'
+else
+  color_blue=''
+  color_green=''
+  color_reset=''
+fi
+
+log() {
+  printf '\n%b[INFO]%b %s\n' "$color_blue" "$color_reset" "$*"
+}
+
 control_plane_address=${CONTROL_PLANE_ADDRESS:-192.168.2.100}
 ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
@@ -8,19 +22,20 @@ control() {
   ssh "${ssh_options[@]}" "debian@${control_plane_address}" "sudo $*"
 }
 
-printf '\n==> Longhorn Pods\n'
+log 'Longhorn Pods'
 control 'kubectl -n longhorn-system get pods -o wide'
 
-printf '\n==> RWX StorageClass and PVC\n'
+log 'RWX StorageClass and PVC'
 control 'kubectl get storageclass longhorn-rwx'
 control 'kubectl get pvc longhorn-rwx-test'
 
-printf '\n==> Share manager\n'
+log 'Share manager'
 control 'kubectl -n longhorn-system get sharemanager'
 
-printf '\n==> Writer and reader placement\n'
+log 'Writer and reader placement'
 control 'kubectl get pods longhorn-rwx-writer longhorn-rwx-reader -o wide'
 
-printf '\n==> Shared-file result\n'
+log 'Shared-file result'
 control 'kubectl wait --for=jsonpath={.status.phase}=Succeeded pod/longhorn-rwx-reader --timeout=5m'
 control 'kubectl logs longhorn-rwx-reader'
+printf '%b[OK]%b Longhorn RWX read/write validation passed\n' "$color_green" "$color_reset"
