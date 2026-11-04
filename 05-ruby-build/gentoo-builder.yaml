@@ -25,10 +25,6 @@ spec:
           env:
             - name: WORKER_NAME
               value: ${WORKER_NAME}
-            - name: ACT_RUNNER_VERSION
-              value: ${ACT_RUNNER_VERSION}
-            - name: ACT_RUNNER_SHA256
-              value: ${ACT_RUNNER_SHA256}
             - name: RUBY_VERSION
               value: ${RUBY_VERSION}
             - name: RUBY_BUILD_ON_START
@@ -40,11 +36,6 @@ spec:
                 secretKeyRef:
                   name: gitea-runner-credentials
                   key: GITEA_URL
-            - name: GITEA_RUNNER_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: gitea-runner-credentials
-                  key: GITEA_RUNNER_TOKEN
             - name: GITEA_PUBLISH_TOKEN
               valueFrom:
                 secretKeyRef:

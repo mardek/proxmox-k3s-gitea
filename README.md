@@ -75,7 +75,7 @@ After starting Gitea access with `./run start`:
 
 The script requests the internal Gitea URL, repository name, Actions runner registration token, and release publishing token. Use `http://gitea.gitea.svc.cluster.local` and `admin/ruby` for this lab. Settings are saved in `.ruby-build.env`; run `./deploy-ruby --reconfigure` after rotating credentials.
 
-All three Gentoo builder Pods and runners remain online. Each deployment randomly selects one worker for the initial build, avoiding three simultaneous compilations; Gitea can schedule subsequent jobs across all runners. Builds compile and test Ruby as an unprivileged user, publish releases to Gitea, and send metrics to `http://192.168.2.100:30080`. See [the Ruby builder guide](05-ruby-build/README.md) for token setup and monitoring.
+Each Debian worker VM runs one persistent Gitea Actions runner as a systemd service; runner registration is stored on the VM, not in a builder Pod. Each deployment randomly selects one worker for the initial build, avoiding three simultaneous compilations; Gitea can schedule subsequent jobs across all runners. Gentoo Pods compile and test Ruby as an unprivileged user, publish releases to Gitea, and send metrics to `http://192.168.2.100:30080`. See [the Ruby builder guide](05-ruby-build/README.md) for token setup and monitoring.
 
 ### Monitor and diagnose
 

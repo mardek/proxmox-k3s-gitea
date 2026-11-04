@@ -1,6 +1,6 @@
 # Gentoo Ruby builders
 
-Deploys one Gentoo StatefulSet on each K3s worker. All three Pods and Gitea Actions runners remain online, but each deployment selects only one random worker for the initial Ruby build to avoid three simultaneous compilations. Gitea can schedule later jobs across all available runners. Successful builds gather timing and resource metrics, publish release assets, and send a report to the central dashboard.
+Installs one persistent Gitea Actions runner as a systemd service on each Debian worker VM and deploys one Gentoo StatefulSet on each K3s worker. Registration is stored in `/var/lib/gitea-actions-runner/.runner` on the VM and is reused when the service or Pod restarts. Each deployment selects only one random worker for the initial Ruby build to avoid three simultaneous compilations. Successful builds gather timing and resource metrics, publish release assets, and send a report to the central dashboard.
 
 ## Prerequisites
 
@@ -51,7 +51,7 @@ export ACT_RUNNER_SHA256='be020ea42303598dd7f0908675ddd7ce4a753eafecc5efe44ca96a
 export GENTOO_IMAGE='gentoo/stage3:latest'
 ```
 
-Open the dashboard at `http://192.168.2.100:30080`. It refreshes every 30 seconds. A worker appears only after its complete build and test run succeeds; there are no partial metrics while compilation is running. The runner daemon starts after the initial build attempt, and the three registered runners are visible under the repository's Actions settings.
+Open the dashboard at `http://192.168.2.100:30080`. It refreshes every 30 seconds. A worker appears only after its complete build and test run succeeds; there are no partial metrics while compilation is running. Deployment installs and starts the Debian worker services before creating the Gentoo Pods, then waits for all three worker names to report a non-offline status. Each Pod waits for its Debian worker runner before starting an initial build. Inspect a host runner with `systemctl status gitea-actions-runner` or `journalctl -u gitea-actions-runner` on the worker VM.
 
 ## Inspect builds
 
@@ -64,7 +64,7 @@ ssh -t debian@192.168.2.100 'sudo kubectl -n gentoo-ruby logs ruby-builder-k3s-w
 ssh -t debian@192.168.2.100 'sudo kubectl -n gentoo-ruby logs ruby-builder-k3s-worker-3-0 -f'
 ```
 
-The initial Portage synchronization and dependency installation can take considerable time. Ruby 3.4.11 is compiled and tested as the unprivileged `builder` user, which is required for Ruby's permission tests. Every StatefulSet has a 5 Gi Longhorn volume for runner registration and build data. A failed test run leaves its logs in the pod but does not publish metrics or a release.
+The initial Portage synchronization and dependency installation can take considerable time. Ruby 3.4.11 is compiled and tested as the unprivileged `builder` user, which is required for Ruby's permission tests. Every StatefulSet has a 5 Gi Longhorn volume for build data; runner registration remains on the Debian VM. A failed test run leaves its logs in the pod but does not publish metrics or a release.
 
 ## Start another build
 

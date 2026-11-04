@@ -27,4 +27,4 @@ runcmd:
   - [systemctl, enable, --now, qemu-guest-agent]
   - [systemctl, enable, --now, iscsid]
   - [sh, -c, "for i in $(seq 1 60); do curl -kfs https://${server_address}:6443/ping && break; sleep 5; done; curl -kfs https://${server_address}:6443/ping"]
-  - [sh, -c, "curl -sfL https://get.k3s.io | sh -s - agent"]
+  - [sh, -c, "for attempt in 1 2 3 4; do curl -sfL https://get.k3s.io | sh -s - agent && systemctl is-active --quiet k3s-agent && exit 0; sleep 30; done; exit 1"]

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y ca-certificates curl jq
+
+runner_user=gitea-runner
+runner_dir=/var/lib/gitea-actions-runner
+runner_binary=/usr/local/bin/act_runner
+
+if ! id "$runner_user" >/dev/null 2>&1; then
+  useradd --system --home-dir "$runner_dir" --create-home --shell /usr/sbin/nologin "$runner_user"
+fi
+install -d -o "$runner_user" -g "$runner_user" "$runner_dir"
+
+asset="act_runner-${ACT_RUNNER_VERSION}-linux-amd64"
+base_url="https://gitea.com/gitea/act_runner/releases/download/v${ACT_RUNNER_VERSION}"
+curl -fL --retry 4 "$base_url/$asset" -o /tmp/act_runner
+echo "${ACT_RUNNER_SHA256}  /tmp/act_runner" | sha256sum -c -
+install -m 0755 /tmp/act_runner "$runner_binary"
+
+if [[ ! -s ${runner_dir}/.runner ]]; then
+  token_response=$(curl -fsS -H "Authorization: token ${GITEA_PUBLISH_TOKEN}" \
+    "${GITEA_RUNNER_URL%/}/api/v1/repos/${GITEA_REPOSITORY}/actions/runners/registration-token")
+  registration_token=$(jq -r '.token // empty' <<<"$token_response")
+  if [[ -z $registration_token ]]; then
+    echo "Could not obtain a Gitea runner registration token" >&2
+    exit 1
+  fi
+  runuser -u "$runner_user" -- sh -c "cd '$runner_dir' && '$runner_binary' register --no-interactive \
+    --instance '$GITEA_RUNNER_URL' --token '$registration_token' --name '$WORKER_NAME' \
+    --labels 'self-hosted,linux,amd64,gentoo,$WORKER_NAME'"
+fi
+
+cat > /etc/systemd/system/gitea-actions-runner.service <<EOF
+[Unit]
+Description=Gitea Actions runner for ${WORKER_NAME}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${runner_user}
+Group=${runner_user}
+WorkingDirectory=${runner_dir}
+ExecStart=${runner_binary} daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now gitea-actions-runner
+systemctl restart gitea-actions-runner
+systemctl --no-pager --full status gitea-actions-runner

@@ -218,6 +218,9 @@ if [[ $check_updates == true ]]; then
     echo 'Update check unavailable; continuing with installed versions'
 fi
 
+log "Pre-pulling Longhorn images on every Kubernetes node"
+CONTROL_PLANE_ADDRESS="$control_plane_address" "${script_dir}/04-longhorn/pre-pull"
+
 log "Installing Longhorn distributed storage"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo '${remote_dir}/04-longhorn/install'"
