@@ -241,6 +241,17 @@ waiting "Waiting for all four Kubernetes nodes to become Ready"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/wait-for-cluster' 4 600"
 
+log "Ensuring Chrony keeps time synchronized on every Kubernetes node"
+node_addresses=$(ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
+  "sudo kubectl get nodes -o jsonpath='{range .items[*]}{.status.addresses[?(@.type==\"InternalIP\")].address}{\"\\n\"}{end}' | grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}'")
+while read -r node_address; do
+  [[ -n $node_address ]] || continue
+  refresh_host_key "$node_address"
+  ssh "${ssh_options[@]}" "debian@${node_address}" \
+    'sudo sh -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq chrony && systemctl enable --now chrony"'
+done <<< "$node_addresses"
+success "Chrony is installed and running on every Kubernetes node"
+
 log "Checking Helm on the control plane"
 ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
   "sudo FORCE_COLOR='$force_color' '${remote_dir}/02-kubernetes/install-helm'"

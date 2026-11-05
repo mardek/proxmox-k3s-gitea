@@ -119,10 +119,14 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
     fi
     success "Gitea repository $GITEA_REPOSITORY is available (HTTP $repo_status)"
     if [[ -z ${GITEA_PUBLISH_TOKEN:-} ]]; then
-      log 'Creating the Gitea release publishing token'
+      token_name="ruby-release-publisher-$(date -u +%Y%m%dT%H%M%SZ)"
+      log "Creating the Gitea release publishing token $token_name"
+      token_payload=$(python3 -c \
+        'import json,sys; print(json.dumps({"name": sys.argv[1], "scopes": ["write:repository"]}))' \
+        "$token_name")
       response=$(curl -fsS -u "admin:${GITEA_ADMIN_PASSWORD}" \
         -H 'Content-Type: application/json' \
-        -d '{"name":"ruby-release-publisher","scopes":["write:repository"]}' \
+        -d "$token_payload" \
         "${gitea_api_url}/api/v1/users/admin/tokens")
       GITEA_PUBLISH_TOKEN=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha1"])' <<<"$response")
       export GITEA_PUBLISH_TOKEN
@@ -195,10 +199,6 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
   remote_dir=/tmp/ruby-build-deploy
   ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
   ssh-keygen -R "$control_plane_address" >/dev/null 2>&1 || true
-  log "Ensuring Chrony keeps time synchronized on the control plane"
-  ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
-    'sudo sh -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq chrony && systemctl enable --now chrony"'
-  success "Chrony is installed and running on the control plane"
   for index in 1 2 3; do
     worker="k3s-worker-$index"
     worker_address=$(ssh "${ssh_options[@]}" "debian@${control_plane_address}" \
@@ -208,10 +208,6 @@ if [[ ${RUBY_DEPLOY_REMOTE:-false} != true ]]; then
       exit 1
     fi
     ssh-keygen -R "$worker_address" >/dev/null 2>&1 || true
-    log "Ensuring Chrony keeps time synchronized on $worker"
-    ssh "${ssh_options[@]}" "debian@${worker_address}" \
-      'sudo sh -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq chrony && systemctl enable --now chrony"'
-    success "Chrony is installed and running on $worker"
     if ssh "${ssh_options[@]}" "debian@${worker_address}" \
       'sudo test -s /var/lib/gitea-actions-runner/.runner'; then
       success "Gitea runner on $worker is already registered; skipping installation"

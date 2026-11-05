@@ -28,7 +28,7 @@ while read -r node_address; do
   (
   log "Pre-pulling Longhorn images on $node_address"
   ssh-keygen -R "$node_address" >/dev/null 2>&1 || true
-  ssh "${ssh_options[@]}" "debian@${node_address}" "sudo FORCE_COLOR='$force_color' bash -s" <<'EOF'
+  ssh "${ssh_options[@]}" "debian@${node_address}" "sudo FORCE_COLOR='$force_color' NODE_ADDRESS='$node_address' bash -s" <<'EOF'
 set -euo pipefail
 
 if [[ ${FORCE_COLOR:-false} == true || (-t 1 && -z ${NO_COLOR:-}) ]]; then
@@ -56,9 +56,9 @@ images=(
 
 for image in "${images[@]}"; do
   if crictl inspecti "$image" >/dev/null 2>&1; then
-    printf '%b[OK]%b Already present: %s\n' "$color_green" "$color_reset" "$image"
+    printf '%b[OK]%b %s: Already present: %s\n' "$color_green" "$color_reset" "$NODE_ADDRESS" "$image"
   else
-    printf '%b[PULL]%b Pulling: %s\n' "$color_yellow" "$color_reset" "$image"
+    printf '%b[PULL]%b %s: Pulling: %s\n' "$color_yellow" "$color_reset" "$NODE_ADDRESS" "$image"
     crictl pull "$image"
   fi
 done

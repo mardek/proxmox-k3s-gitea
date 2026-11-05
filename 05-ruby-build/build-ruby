@@ -103,16 +103,27 @@ main{{background:white;padding:30px}}table{{border-collapse:collapse;width:100%}
 PY
 
 dashboard_url=${DASHBOARD_URL:-http://ruby-build-dashboard:8080}
-if [[ $dashboard_url =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?/?$ ]]; then
-  log "Ignoring the Pod-local dashboard address $dashboard_url"
-  dashboard_url=http://ruby-build-dashboard:8080
-fi
+case $dashboard_url in
+  localhost*|127.0.0.1*|\[::1\]*|http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*|http://\[::1\]*|https://\[::1\]*)
+    log "Ignoring the Pod-local dashboard address $dashboard_url"
+    dashboard_url=http://ruby-build-dashboard:8080
+    ;;
+esac
 curl -fsS --retry 3 --retry-connrefused -X PUT \
   --data-binary @metrics.json "${dashboard_url}/metrics/${WORKER_NAME}.json"
 curl -fsS --retry 3 --retry-connrefused -X PUT \
   --data-binary @build-report.html "${dashboard_url}/reports/${WORKER_NAME}.html"
+success "Published build metrics and report to $dashboard_url"
 
+gitea_url=${GITEA_URL%/}
+case $gitea_url in
+  localhost*|127.0.0.1*|\[::1\]*|http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*|http://\[::1\]*|https://\[::1\]*)
+    log "Ignoring the Pod-local Gitea address $gitea_url"
+    gitea_url=http://gitea.gitea.svc.cluster.local
+    ;;
+esac
 if [[ -n ${GITEA_PUBLISH_TOKEN:-} && -n ${GITEA_REPOSITORY:-} ]]; then
+  log "Publishing the release to $gitea_url/$GITEA_REPOSITORY"
   tag="ruby-${RUBY_VERSION}-${build_id}"
   python3 - <<'PY'
 import json
@@ -128,8 +139,10 @@ Path('release.json').write_text(json.dumps({
 PY
   response=$(curl -fsS -H "Authorization: token ${GITEA_PUBLISH_TOKEN}" \
     -H 'Content-Type: application/json' --data-binary @release.json \
-    "${GITEA_URL}/api/v1/repos/${GITEA_REPOSITORY}/releases")
-  upload_url=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["upload_url"])')
+    "${gitea_url}/api/v1/repos/${GITEA_REPOSITORY}/releases")
+  upload_url=$(python3 -c \
+    'import json,sys; from urllib.parse import urlsplit,urlunsplit; upload=urlsplit(json.load(sys.stdin)["upload_url"]); base=urlsplit(sys.argv[1]); print(urlunsplit((base.scheme, base.netloc, upload.path, upload.query, "")))' \
+    "$gitea_url" <<<"$response")
   for asset in "$archive" "ruby-${RUBY_VERSION}-linux-amd64" SHA256SUMS metrics.json build-report.html; do
     curl -fsS -H "Authorization: token ${GITEA_PUBLISH_TOKEN}" \
       -H 'Content-Type: application/octet-stream' --data-binary "@$asset" \

@@ -17,7 +17,7 @@ Run these commands on the Debian administration VM:
 ./deploy
 ```
 
-Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts for the Proxmox API token and Gitea administrator password. Settings are saved in `.proxmox-env` with owner-only permissions and reused on later runs. Missing exports are also appended to existing `.bashrc` and `.zshrc` files.
+Open `http://192.168.2.100:8080` and log in as `admin`. The deployment prompts for the Proxmox API token and Gitea administrator password. Settings are saved in `.proxmox-env` with owner-only permissions and reused on later runs. Missing exports are also appended to existing `.bashrc` and `.zshrc` files. Deployment installs and enables Chrony on the control plane and workers to keep their clocks synchronized.
 
 If VMID `9000` (`debian-12-cloud`) is absent, deployment creates it from the official Debian 12 generic cloud image; an existing template is left untouched.
 

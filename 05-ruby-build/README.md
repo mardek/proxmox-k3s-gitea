@@ -1,6 +1,6 @@
 # Gentoo Ruby builders
 
-Installs Chrony for time synchronization on the control plane and each Debian worker VM, installs one persistent Gitea Actions runner as a systemd service on each worker, and deploys one Gentoo StatefulSet on each K3s worker. Build lifecycle logs and metric timestamps use UTC. Registration is stored in `/var/lib/gitea-actions-runner/.runner` on the VM and is reused when the service or Pod restarts. Each deployment selects only one random worker for the initial Ruby build to avoid three simultaneous compilations. Successful builds gather timing and resource metrics, publish release assets, and send a report to the central dashboard.
+Installs one persistent Gitea Actions runner as a systemd service on each Debian worker VM and deploys one Gentoo StatefulSet on each K3s worker. Build lifecycle logs and metric timestamps use UTC. Registration is stored in `/var/lib/gitea-actions-runner/.runner` on the VM and is reused when the service or Pod restarts. Each deployment selects only one random worker for the initial Ruby build to avoid three simultaneous compilations. Successful builds gather timing and resource metrics, publish release assets, and send a report to the central dashboard.
 
 ## Prerequisites
 

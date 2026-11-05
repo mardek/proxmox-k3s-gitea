@@ -49,6 +49,7 @@ emerge --noreplace \
   sys-process/time
 
 if [[ ${RUBY_BUILD_ON_START:-true} == true ]]; then
+  export DASHBOARD_URL=http://ruby-build-dashboard:8080
   log "Starting the initial Ruby build"
   if ! id builder >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash builder
